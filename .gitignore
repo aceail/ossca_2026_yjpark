@@ -12,3 +12,5 @@ tomorrow_you.db-shm
 # OMC internal state cache (per-session)
 .omc/state/
 .omc/artifacts/
+__pycache__/
+*.pyc
