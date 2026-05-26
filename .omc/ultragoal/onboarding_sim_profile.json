@@ -1,0 +1,38 @@
+{
+  "user_id": "local-40f7529e",
+  "created_at": "2026-05-26T08:32:37.549111+00:00",
+  "slots": {
+    "trigger_category": {
+      "value": "글쓰기·논문·보고서",
+      "confidence": 1.0,
+      "source": "onboarding_card_1"
+    },
+    "avoidance_destination": {
+      "value": "유튜브·릴스·쇼츠",
+      "confidence": 1.0,
+      "source": "onboarding_card_2"
+    },
+    "active_persona_id": {
+      "value": "persona_morning_self",
+      "confidence": 1.0,
+      "source": "onboarding_card_3"
+    },
+    "fear_anchor": {
+      "value": "부모의 기대와 다른 모습",
+      "confidence": 0.7,
+      "source": "onboarding_card_4",
+      "optional": true
+    },
+    "recovery_pattern": {
+      "value": "첫 문장 쓰기",
+      "confidence": 0.7,
+      "source": "onboarding_card_5",
+      "optional": true
+    }
+  },
+  "completion_percent": 100.0,
+  "forbidden_topics": [
+    "부모 기대"
+  ],
+  "preferred_tone_mode_attribute": null
+}

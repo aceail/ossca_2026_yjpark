@@ -1,6 +1,6 @@
-MIT License
+MIT License with Ethical Use Restriction (v1)
 
-Copyright (c) 2026 Yeonjae Park
+Copyright (c) 2026 Yeonjae Park (OSSCA 2026 mentee)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,3 +19,46 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+## Ethical Use Restriction (Dual-Use Defense, non-MIT addendum)
+
+This Software was designed as a personal procrastination intervention tool
+with strict safety rails (Slow Harm monitoring, absolute forbidden words,
+Soft-stop layer, paradoxical-intent validation). The architecture — user
+vulnerability extraction + persuasive sentence reassembly + persona-bound
+voicing — is structurally easy to repurpose into:
+
+  - high-pressure productivity tools that weaponize self-blame
+  - shame-based coaching products
+  - organizational surveillance UX
+  - persuasion engines that exploit psychological fingerprints
+  - parasocial companion bots without consent gating
+
+**You may not** use this Software, in whole or in part, to build or operate
+any system that:
+
+1. Uses identified user vulnerabilities (regret patterns, fear anchors,
+   recovery slots, fingerprint snapshots) as persuasive material against the
+   user's own informed interest.
+2. Removes or substantially weakens the Safety Policy guardrails (§6.5 F of
+   FINAL_GOAL.md): absolute forbidden words, Soft-stop, slow-harm time series,
+   paradoxical-intent detection, Self-Destruct, social-exposure auto-blur.
+3. Routes the Software's outputs to third parties (employers, family,
+   commercial coaches, public posts) without the affected user's prior,
+   informed, revocable consent for each routing channel.
+4. Reintroduces gamification surface (streaks, badges, leaderboards) that the
+   project's non-goals explicitly exclude, when targeting users with depressive
+   symptoms, burnout, or addiction recovery contexts.
+5. Operates the Software against minors without compliant legal guardian
+   consent and an independent safety review.
+
+Any redistribution of the Software, in modified or unmodified form, must keep
+this Ethical Use Restriction intact alongside the MIT permission grant. Forks
+that remove or alter the Restriction are not licensed to use the name
+"내일의 너 / Tomorrow's You" nor the project's persona, prompt, or design
+artifacts shipped under `.omc/ultragoal/`.
+
+By using the Software you acknowledge these restrictions and accept that the
+authors may publicly designate non-compliant forks as such.

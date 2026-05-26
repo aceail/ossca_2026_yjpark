@@ -1,0 +1,92 @@
+{
+  "sample_avoidance": "내일 10시 발표인데 슬라이드 0장. 새벽 1시 14분이야.",
+  "sample_timeline": "현재 2026-05-27 01:14, 마감 2026-05-27 10:00 (8시간 46분 후)",
+  "model": "exaone3.5:7.8b",
+  "previews": {
+    "내일의 나": {
+      "persona_name": "내일의 나",
+      "perspective": "1st",
+      "tone_mode": "Sharp",
+      "avatar_icon": "🌙",
+      "avatar_color": "#3B6B9A",
+      "greeting": "내일의 내가 너에게 보낸 메시지야",
+      "preview_card": {
+        "card_type": "regret",
+        "sentences": {
+          "fact": "내일 오전 10시 발표인데, 지금까지 만든 슬라이드가 하나도 없어 전체 일정이 위험에 처해 있다.",
+          "feeling": "내일 팀 앞에서 준비 부족으로 인한 실망감과 압박감을 느낄 것이다.",
+          "micro_action": "즉시 슬라이드 제작을 시작한다."
+        }
+      },
+      "latency_s": 4.9199230670928955
+    },
+    "1년 후의 나": {
+      "persona_name": "1년 후의 나",
+      "perspective": "1st",
+      "tone_mode": "Quiet",
+      "avatar_icon": "🌅",
+      "avatar_color": "#5A7080",
+      "greeting": "1년 뒤의 내가 짧게 한 마디",
+      "preview_card": {
+        "card_type": "regret",
+        "sentences": {
+          "fact": "발표 슬라이드 완성 없이 8시간 46분 남아있다.",
+          "feeling": "팀원들의 시선이 걱정되어 마음이 무겁다.",
+          "micro_action": "지금 당장 기본 슬라이드 구조라도 작성해야겠다."
+        }
+      },
+      "latency_s": 0.44968366622924805
+    },
+    "친한 친구 ㅈㅅ": {
+      "persona_name": "친한 친구 ㅈㅅ",
+      "perspective": "2nd",
+      "tone_mode": "Witty",
+      "avatar_icon": "🤝",
+      "avatar_color": "#C4935A",
+      "greeting": "야 너 지금 뭐 하는 거야ㅋ",
+      "preview_card": {
+        "card_type": "regret",
+        "sentences": {
+          "fact": "지금 1시 14분인데 슬라이드 한 장도 안 만들어졌다니, 팀 앞에서 정말 당황스럽겠다 싶네.",
+          "feeling": "내일 발표 때 다들 네 준비 과정을 궁금해하며 기대하고 있을지도 몰라.",
+          "micro_action": "지금부터라도 간단한 슬라이드라도 만들어보자, 같이 하자!"
+        }
+      },
+      "latency_s": 0.5386898517608643
+    },
+    "엄격한 코치": {
+      "persona_name": "엄격한 코치",
+      "perspective": "2nd",
+      "tone_mode": "Sharp",
+      "avatar_icon": "🎯",
+      "avatar_color": "#3B6B9A",
+      "greeting": "10분 줄게. 한 줄만 쓰고 와.",
+      "preview_card": {
+        "card_type": "regret",
+        "sentences": {
+          "fact": "지금 시간이 1시 14분으로, 발표까지 8시간 46분 남았습니다. 슬라이드 제작은 지금 당장 시작해야 합니다.",
+          "feeling": "팀 앞에서 준비되지 않은 모습을 보여드리면 자신감 상실과 함께 팀 내 신뢰도 떨어질 수 있습니다.",
+          "micro_action": "슬라이드 제작 시작한다"
+        }
+      },
+      "latency_s": 0.5681548118591309
+    },
+    "객관 옵저버": {
+      "persona_name": "객관 옵저버",
+      "perspective": "3rd",
+      "tone_mode": "Quiet",
+      "avatar_icon": "👁️",
+      "avatar_color": "#5A7080",
+      "greeting": "그는 지금 23시 47분, 슬라이드 0장 상태로...",
+      "preview_card": {
+        "card_type": "regret",
+        "sentences": {
+          "fact": "현재 시각 01:14, 마감 시각까지 8시간 46분 남음. 슬라이드 제작 완료율 0%.",
+          "feeling": "이 사람은 팀 앞 발표에서 준비 부족으로 인해 자신감을 잃고 당황할 가능성이 높음.",
+          "micro_action": "그는 즉시 슬라이드 제작 소프트웨어를 열고 기본 구조를 시작한다."
+        }
+      },
+      "latency_s": 0.5750041007995605
+    }
+  }
+}

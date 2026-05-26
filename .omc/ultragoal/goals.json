@@ -1,0 +1,135 @@
+{
+  "version": 1,
+  "createdAt": "2026-05-26T05:32:37.952Z",
+  "updatedAt": "2026-05-26T08:57:48.785Z",
+  "briefPath": ".omc/ultragoal/brief.md",
+  "goalsPath": ".omc/ultragoal/goals.json",
+  "ledgerPath": ".omc/ultragoal/ledger.jsonl",
+  "claudeGoalMode": "aggregate",
+  "goals": [
+    {
+      "id": "G001-designlockdown",
+      "title": "DesignLockdown",
+      "objective": "온보딩 길이(1/3/5질문)와 HITL 수집 타이밍(직전 가로채기 vs 사후 저널링) 2개 결정 확정, 시나리오 카드 톤 가이드 1장 산출",
+      "status": "complete",
+      "attempt": 1,
+      "createdAt": "2026-05-26T05:32:37.952Z",
+      "updatedAt": "2026-05-26T06:18:11.089Z",
+      "startedAt": "2026-05-26T05:32:43.954Z",
+      "completedAt": "2026-05-26T06:18:11.089Z",
+      "evidence": "G001 DesignLockdown complete. Locked decisions: (1) 5질문 카드형 3 필수 + 2 보너스, (2) 회피 직전 가로채기 + cooldown + 연출형 마찰. v2 노선 보강(관계의 장기 신뢰·행동 자본 보존·미래 자아의 두 얼굴), 1인칭 화법 강제, Slow Harm Safety 신설, 13 테이블 데이터 모델, 9 stories 로드맵 (G009-evaluationharness는 add-goal로 추가, ledger plan-stored condition은 G008까지 — 별도 추적). Evidence files: .omc/ultragoal/FINAL_GOAL.md (v2, 14 sections), .omc/ultragoal/CCG_REVIEW_R2.md (blind-spot 합성), .omc/ultragoal/brief.md (locked decisions sync), .omc/artifacts/ask/ (Codex+Gemini R1+R2 4건 원본). v1 백업: .omc/ultragoal/FINAL_GOAL.v1.backup.md."
+    },
+    {
+      "id": "G002-ollamapoc",
+      "title": "OllamaPoC",
+      "objective": "로컬 모델 1-2개 선정, 한국어 시나리오 카드 single-shot 프롬프트 템플릿 작성, 5건 샘플 생성 정성 평가 통과",
+      "status": "complete",
+      "attempt": 1,
+      "createdAt": "2026-05-26T05:32:37.952Z",
+      "updatedAt": "2026-05-26T07:44:15.539Z",
+      "startedAt": "2026-05-26T07:44:00.995Z",
+      "completedAt": "2026-05-26T07:44:15.539Z",
+      "evidence": "G002 OllamaPoC complete. 5 모델 다운로드(qwen3:1.7b/exaone3.5:7.8b/qwen3:8b/qwen3:14b/qwen3.6:27b, ollama 0.15.6은 qwen35 미지원으로 27b 비활성), 4 모델 sanity check OK. v1 프롬프트 + 5 합성 회피 샘플로 20 시나리오 생성. 정량 메트릭 동률이었으나 정성 비교에서 EXAONE 3.5 7.8B 압도적 우수(자연성·속도 0.49s·금지어 0). v2 프롬프트(팩트폭격+TIMELINE+유쾌)로 EXAONE 5 샘플 재생성, 톤 의도 달성하나 길이 80-150자 모두 초과(G009에서 회귀 테스트). baseline 결정: EXAONE 3.5 7.8B = Witty 모드 baseline. v2.2 큰 보강: 4 톤 모드(Quiet/Sharp/Witty/Savage) + Recovery sub-mode + 모드 무관 절대 한계선, Agent 격상(GoogleCalendar/LocalFiles/WebSearch), 13->16 테이블, 9->10 stories(G010 AgentIntegrations 신설). Evidence: scripts/g002_pipeline.py, scripts/g002_pipeline_v2.py, .omc/ultragoal/scenario_prompt_v1.md, scenario_prompt_v2.md, avoidance_samples_v1.md, avoidance_samples_v2.md, g002_results_v1.md(20 카드), g002_results_v2.md(5 카드), FINAL_GOAL.md v2.2(16 섹션). 모델 위치: /dataset/yjpark/ossca_yjpark/ollama_models (.gitignore 처리됨)."
+    },
+    {
+      "id": "G003-datamodel",
+      "title": "DataModel",
+      "objective": "User/UserProfile/AvoidanceSession/RegretScore/FingerprintSnapshot 5개 테이블 SQLite 스키마 + 마이그레이션 + 기본 CRUD 단위 테스트",
+      "status": "complete",
+      "attempt": 1,
+      "createdAt": "2026-05-26T05:32:37.952Z",
+      "updatedAt": "2026-05-26T08:36:51.094Z",
+      "startedAt": "2026-05-26T07:50:50.606Z",
+      "completedAt": "2026-05-26T08:36:51.094Z",
+      "evidence": "G003 DataModel v1 complete. 17 테이블 SQLite 스키마 + WAL + FK + 마이그레이션 시스템 + SHA256 checksum + 5 default 페르소나 seed. 5 그룹: 사용자 상태(5) + LLM 운영(7) + Safety(1) + Agent(3) + Persona(1). Partial unique index로 builtin/custom persona 분리. CHECK constraint(perspective·tone_mode·RegretScore 0-10). FK CASCADE for child rows, SET NULL for shared resources(Persona·PromptVersion). unittest 13/13 green: 마이그레이션 idempotent·17 테이블·5 seed·CRUD·FK cascade·CHECK·Safety·Tool audit. Evidence: .omc/ultragoal/DATA_MODEL_v1.md, db/migrations/001_initial.sql, db/__init__.py, db/schema.py, tests/test_data_model.py. tomorrow_you.db는 .gitignore 처리."
+    },
+    {
+      "id": "G004-hitlprobeengine",
+      "title": "HITLProbeEngine",
+      "objective": "슬롯 완성도 추적 + 정보이득 기반 질문 선택 + Phase 1/2/3 라우터, 질문뱅크 v1, 통합 테스트",
+      "status": "complete",
+      "attempt": 0,
+      "createdAt": "2026-05-26T05:32:37.952Z",
+      "updatedAt": "2026-05-26T08:45:13.794Z",
+      "completedAt": "2026-05-26T08:45:13.794Z",
+      "evidence": "G004 HITLProbeEngine v1 complete. Phase 1/2/3 라우터 + 휴리스틱 점수(missing/low_conf/expected_ig/fatigue) + 24h cooldown + 페르소나-aware active prompt selector. ProbeQuestion 12개 seed (time_window/regret_recall/recovery/fear_anchor/post_emotion/micro_action/deadline/forbidden_topic). unittest 10/10 green: PhaseRouter 4 + ProbeEngine 3 + ActivePrompt 2 + Seed 1. Evidence: probe/engine.py, probe/__init__.py, db/migrations/002_seed_probe_questions.sql, tests/test_probe_engine.py, .omc/ultragoal/PROBE_ENGINE_v1.md."
+    },
+    {
+      "id": "G005-onboardingflow",
+      "title": "OnboardingFlow",
+      "objective": "Phase 1 60초 마이크로 인터뷰 UX(질문뱅크 연결, 응답 검증, UserProfile 초기화), 사용자 테스트 1회",
+      "status": "complete",
+      "attempt": 0,
+      "createdAt": "2026-05-26T05:32:37.952Z",
+      "updatedAt": "2026-05-26T08:32:55.886Z",
+      "completedAt": "2026-05-26T08:32:55.886Z",
+      "evidence": "G005 OnboardingFlow v1 complete. 5 카드(3 필수 + 2 보너스) 명세 + UserProfile 초기화 스키마 + TUI ASCII 와이어프레임 + 웹 SPA 컴포넌트 트리 + sensitive topic 자동 audit. 시뮬레이터 deep mode 실행 검증: completion_percent 100%, forbidden_topics에 \"부모 기대\" 자동 추가 (Card 4 sensitive 선택). 60초 ESCape 경로(3 카드) + 120초 deep(5 카드) 분기 명시. 페르소나 선택 카드는 G011 미리보기 캐시 의존. Evidence: .omc/ultragoal/ONBOARDING_FLOW_v1.md, onboarding_wireframes_v1.md, onboarding_sim_profile.json, scripts/onboarding_simulator.py."
+    },
+    {
+      "id": "G006-avoidancesessionpipeline",
+      "title": "AvoidanceSessionPipeline",
+      "objective": "회피 입력 → Probe 가로채기 → Ollama 시나리오 생성 → 사용자 결정 로깅, end-to-end 한 사이클 통합 테스트",
+      "status": "complete",
+      "attempt": 0,
+      "createdAt": "2026-05-26T05:32:37.952Z",
+      "updatedAt": "2026-05-26T08:54:53.225Z",
+      "completedAt": "2026-05-26T08:54:53.225Z",
+      "evidence": "G006 AvoidanceSessionPipeline + TUI MVP complete (executor agent A). pipeline/orchestrator.py — SessionOrchestrator(start_session, maybe_probe, record_probe_answer, generate_scenario, record_decision) + Safety 키워드 검출 → soft_stop. ui/tui.py — ANSI 카드 렌더링 (52컬럼, 페르소나 색·아이콘·헤더·운동성 버튼·Self-Destruct ⊗·30초 타이머 시각). scripts/cli.py — 사용자 실행 가능한 CLI MVP, EXAONE 실제 호출 검증(예: \"운동 미루는 중\" → 🌙 내일의 나 카드 정상 렌더). 003_pipeline_session_indexes.sql. unittest 36/36 green (1 skipped: OLLAMA 실호출은 env-gated). G010 회귀 0건(29/29 유지). Evidence: pipeline/, ui/, scripts/cli.py, tests/test_pipeline.py, tests/test_tui_card.py, db/migrations/003_pipeline_session_indexes.sql, .omc/ultragoal/PIPELINE_v1.md."
+    },
+    {
+      "id": "G007-regretfingerprint",
+      "title": "RegretFingerprint",
+      "objective": "사후 회고 알림 + RegretScore 기록 + FingerprintSnapshot 주기 업데이트, 시나리오 정확도 평가 루프",
+      "status": "complete",
+      "attempt": 0,
+      "createdAt": "2026-05-26T05:32:37.952Z",
+      "updatedAt": "2026-05-26T08:57:48.785Z",
+      "completedAt": "2026-05-26T08:57:48.785Z",
+      "evidence": "G007 RegretFingerprint complete. regret/scheduler.py — 24h schedule_reminder + record_regret_score(0-10 CHECK). regret/fingerprint.py — FingerprintBuilder + 16-dim hash embedding + 통계 + top tokens. regret/slow_harm.py — 주별 SafetyHarmTimeSeries(self_blame·identity_failure·failure_imagery_ratio) + UPSERT. regret/accuracy.py — CCG R2 메트릭(card_accuracy 1-5·return_intent 1-5) → EvaluationResult. unittest 14/14 green. Evidence: regret/, tests/test_regret_fingerprint.py, .omc/ultragoal/REGRET_FINGERPRINT_v1.md."
+    },
+    {
+      "id": "G008-mvprelease",
+      "title": "MVPRelease",
+      "objective": "CLI MVP 패키징, README/기여가이드/라이선스/데모, 1명 사용자 2주 사용성 피드백 수집, OSSCA 멘토 리뷰 준비",
+      "status": "in_progress",
+      "attempt": 0,
+      "createdAt": "2026-05-26T05:32:37.952Z",
+      "updatedAt": "2026-05-26T05:32:37.952Z"
+    },
+    {
+      "id": "G009-evaluationharness",
+      "title": "EvaluationHarness",
+      "objective": "고정 30 샘플, 정량 메트릭(생성 성공률·자연성·근거 반영률·금지표현 위반·P95 지연), 프롬프트 회귀 테스트, 안전 체크 자동화, 모델 A/B 비교 게이트",
+      "status": "complete",
+      "attempt": 0,
+      "createdAt": "2026-05-26T06:12:51.135Z",
+      "updatedAt": "2026-05-26T08:27:50.053Z",
+      "evidence": "G009 v1 EvaluationHarness 인프라 complete. 9 차원 자동 메트릭 자동화 + 30 골든 샘플 + EXAONE Witty baseline 3/30 pass (G002 v2 회귀 정확 검출). unittest 34/34 green. Evidence: EVAL_HARNESS_DESIGN_v1.md, golden_samples_v1.json, eval_v1_results.md, eval_v1_summary.json, scripts/eval_harness.py, tests/test_eval_harness.py.",
+      "completedAt": "2026-05-26T08:27:50.053Z"
+    },
+    {
+      "id": "G010-agentintegrations",
+      "title": "AgentIntegrations",
+      "objective": "GoogleCalendar(read-only) + LocalFiles + WebSearch tool MVP, OAuth 로컬 흐름, 토큰 암호화 저장, ToolInvocation 감사 로그, agent 호출 결과를 시나리오 카드 fact/micro_action에 결합",
+      "status": "complete",
+      "attempt": 0,
+      "createdAt": "2026-05-26T07:43:28.573Z",
+      "updatedAt": "2026-05-26T08:52:54.062Z",
+      "evidence": "G010 AgentIntegrations v1 complete (executor agent B). agent/router.py — ToolRouter 휴리스틱(마감→calendar, PPT→files, 참고→search). agent/integrations.py — ExternalIntegration CRUD + cryptography.fernet 토큰 암호화 (fallback base64). agent/tools/{google_calendar, local_files, web_search}.py — read-only mock (실제 OAuth는 향후 라운드). 004_seed_agent_tools.sql — 5 AgentTool seed. ToolInvocation 자동 audit 로그. unittest 29/29 green (router·integration·3 tools·invocation log). Evidence: agent/, db/migrations/004_seed_agent_tools.sql, tests/test_agent_tools.py, .omc/ultragoal/AGENT_INTEGRATIONS_v1.md.",
+      "completedAt": "2026-05-26T08:52:54.062Z"
+    },
+    {
+      "id": "G011-personasystem",
+      "title": "PersonaSystem",
+      "objective": "5 default 페르소나(내일의 나/1년 후 나/친한 친구/엄격한 코치/객관 옵저버) + Persona Builder UX + 페르소나별 system prompt + 커스텀 페르소나 안전 audit + perspective별 화법 매트릭스 + 페르소나 선택 UX (G005 연계)",
+      "status": "complete",
+      "attempt": 0,
+      "createdAt": "2026-05-26T08:11:13.131Z",
+      "updatedAt": "2026-05-26T08:41:46.441Z",
+      "evidence": "G011 PersonaSystem v1 complete. 5 default 페르소나(내일의 나·1년 후 나·친한 친구 ㅈㅅ·엄격한 코치·객관 옵저버) 자체 system_prompt + BASE_SYSTEM_PROMPT(모드 무관 절대 한계선). perspective 1st/2nd/3rd 화법 강제, 톤 Quiet/Sharp/Witty/Savage. Persona Builder audit 정책: name·voice_style·greeting·system_prompt_override 4필드 절대 한계선 검사, forbidden_topics 면제, builtin은 negative prompt 명시로 audit 면제. save_persona + seed_builtin_prompts. 5 페르소나 미리보기 카드 생성 검증(EXAONE, 동일 입력에 차별화된 화법 확인). unittest 13/13 green. Evidence: persona/builder.py, persona/__init__.py, scripts/persona_preview.py, .omc/ultragoal/persona_previews_v1.json, PERSONA_SYSTEM_v1.md, tests/test_persona_system.py.",
+      "completedAt": "2026-05-26T08:41:46.441Z"
+    }
+  ],
+  "claudeObjective": "Complete all ultragoal stories in .omc/ultragoal/goals.json: G001-designlockdown DesignLockdown; G002-ollamapoc OllamaPoC; G003-datamodel DataModel; G004-hitlprobeengine HITLProbeEngine; G005-onboardingflow OnboardingFlow; G006-avoidancesessionpipeline AvoidanceSessionPipeline; G007-regretfingerprint RegretFingerprint; G008-mvprelease MVPRelease",
+  "activeGoalId": "G008-mvprelease"
+}

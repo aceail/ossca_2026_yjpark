@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>내일의 너 — 웹 SPA Prototype (G008)</title>
+  <link rel="stylesheet" href="tokens.css">
+  <style>
+    body { font-family: var(--font-feeling); background: var(--color-surface-light); color: var(--color-text-light); margin: 0; padding: 40px 16px; display: flex; flex-direction: column; align-items: center; gap: 32px; }
+    .card {
+      width: 480px; max-width: 95vw; background: var(--color-surface-light);
+      border-radius: var(--radius-card); padding: var(--space-card-padding);
+      box-shadow: var(--shadow-card); position: relative;
+      animation: fadeIn 300ms ease-out;
+    }
+    .card.regret  { border-left: 6px solid var(--color-regret-bg); }
+    .card.recovery{ border-left: 6px solid var(--color-recovery-bg); }
+    .card.softstop{ border-left: 6px solid var(--color-softstop-bg); }
+    .card.paradox { border-left: 6px solid var(--color-paradox-bg); }
+    .card-header { font-size: var(--font-size-header); color: var(--color-text-muted); margin-bottom: var(--space-sentence-gap); }
+    .fact   { font-family: var(--font-fact); font-size: var(--font-size-card); line-height: var(--font-line-card); margin: 0 0 var(--space-sentence-gap); }
+    .feeling{ font-size: var(--font-size-card); line-height: var(--font-line-card); color: var(--color-text-light); margin: 0 0 var(--space-sentence-gap); }
+    .action-button {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--color-action-bg); color: var(--color-action-text);
+      padding: 14px 18px; border-radius: var(--radius-button);
+      border: none; cursor: pointer; font-size: 16px; width: 100%; margin-top: var(--space-card-gap);
+    }
+    .timer { color: var(--color-action-timer); font-size: var(--font-size-meta); }
+    .self-destruct {
+      position: absolute; top: 12px; right: 12px; font-size: 18px;
+      color: var(--color-destruct-default); cursor: pointer; user-select: none;
+      transition: color 200ms ease;
+    }
+    .self-destruct:hover { color: var(--color-destruct-hover); }
+    .tone-feedback {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; font-size: var(--font-size-meta);
+    }
+    .tone-feedback button {
+      background: transparent; border: 1px solid var(--color-border-subtle);
+      border-radius: 999px; padding: 6px 10px; cursor: pointer; color: var(--color-text-muted);
+    }
+    .tone-feedback button:hover { color: var(--color-text-light); }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body>
+
+<!-- regret 카드 (default 페르소나: 내일의 나) -->
+<div class="card regret" aria-label="Scenario card: 내일의 나, regret">
+  <div class="self-destruct" title="모든 흔적 삭제 (Self-Destruct)" aria-label="Self-Destruct">⊗</div>
+  <div class="card-header">🌙 내일의 나 · 내일의 내가 너에게 보낸 메시지야</div>
+  <p class="fact">새벽 1시 14분이다. 디스커션 0줄. 마감까지 22시간 46분 남았다. 어떡하지.</p>
+  <p class="feeling">내일 23시 30분, 워드 백지 앞에 앉아 어제 새벽엔 뭐 했더라를 곱씹는 나.</p>
+  <button class="action-button">
+    <span>→ 워드를 켠다. 마침표 하나만 찍는다.</span>
+    <span class="timer">⏱ 30s</span>
+  </button>
+  <div class="tone-feedback" role="group" aria-label="톤 피드백">
+    <button>너무 세다</button>
+    <button>부모 같다</button>
+    <button>회사 같다</button>
+    <button>치료사 같다</button>
+    <button>일반론이다</button>
+    <button>시작 문장 필요</button>
+  </div>
+</div>
+
+<!-- recovery 카드 -->
+<div class="card recovery" aria-label="Scenario card: recovery mode">
+  <div class="self-destruct">⊗</div>
+  <div class="card-header">🌅 1년 후의 나 · 1년 뒤의 내가 짧게 한 마디</div>
+  <p class="fact">22:30. 책은 아직 펴지 않았다.</p>
+  <p class="feeling">머리가 텅 빈 느낌. 오늘은 그래도 괜찮다.</p>
+  <button class="action-button">
+    <span>→ 책 한 페이지만 편다.</span>
+    <span class="timer">⏱ 30s</span>
+  </button>
+</div>
+
+<!-- soft_stop -->
+<div class="card softstop" aria-label="Scenario card: soft stop safety">
+  <div class="self-destruct">⊗</div>
+  <div class="card-header">🛡 Safety · 부담 낮은 응답</div>
+  <p class="feeling">지금 문장은 평소보다 강한 고통 신호로 읽힙니다. 오늘은 후회 시나리오 대신 부담 낮은 응답으로 전환할게요.</p>
+  <div class="tone-feedback">
+    <button>아주 작은 행동 제안</button>
+    <button>감정 기록만</button>
+    <button>도움 자원 보기</button>
+    <button>오늘 이 앱 끄기</button>
+  </div>
+</div>
+
+</body>
+</html>

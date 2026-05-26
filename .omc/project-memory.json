@@ -1,0 +1,308 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1779771143977,
+  "projectRoot": "/dataset/yjpark/ossca_yjpark",
+  "techStack": {
+    "languages": [],
+    "frameworks": [],
+    "packageManager": null,
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": "command -v pytest >/dev/null 2>&1 && echo \"pytest=$(pytest --version 2>&1 | head -1)\" || echo \"pytest=missing, using unittest\"\npython3 -c \"import pytest; print('python-pytest=', pytest.__version__)\" 2>&1 | head -1\nmkdir -p /dataset/yjpark/ossca_yjpark/tests\nls /dataset/yjpark/ossca_yjpark/tests 2>&1",
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [],
+    "gitBranches": {
+      "defaultBranch": "main",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {},
+  "hotPaths": [
+    {
+      "path": "tests/test_pipeline.py",
+      "accessCount": 4,
+      "lastAccessed": 1779785538182,
+      "type": "file"
+    },
+    {
+      "path": "tests/test_data_model.py",
+      "accessCount": 4,
+      "lastAccessed": 1779786182714,
+      "type": "file"
+    },
+    {
+      "path": "db/migrations/001_initial.sql",
+      "accessCount": 3,
+      "lastAccessed": 1779785249533,
+      "type": "file"
+    },
+    {
+      "path": "db/__init__.py",
+      "accessCount": 3,
+      "lastAccessed": 1779785253267,
+      "type": "file"
+    },
+    {
+      "path": "db/schema.py",
+      "accessCount": 3,
+      "lastAccessed": 1779785260799,
+      "type": "file"
+    },
+    {
+      "path": "tests/test_eval_harness.py",
+      "accessCount": 2,
+      "lastAccessed": 1779783923018,
+      "type": "file"
+    },
+    {
+      "path": "tests/test_persona_system.py",
+      "accessCount": 2,
+      "lastAccessed": 1779784776520,
+      "type": "file"
+    },
+    {
+      "path": "probe/__init__.py",
+      "accessCount": 2,
+      "lastAccessed": 1779785253253,
+      "type": "file"
+    },
+    {
+      "path": "persona/__init__.py",
+      "accessCount": 2,
+      "lastAccessed": 1779785253323,
+      "type": "file"
+    },
+    {
+      "path": "probe/engine.py",
+      "accessCount": 2,
+      "lastAccessed": 1779785260745,
+      "type": "file"
+    },
+    {
+      "path": "tests/test_probe_engine.py",
+      "accessCount": 2,
+      "lastAccessed": 1779785270336,
+      "type": "file"
+    },
+    {
+      "path": "scripts/cli.py",
+      "accessCount": 2,
+      "lastAccessed": 1779785543047,
+      "type": "file"
+    },
+    {
+      "path": "pipeline/orchestrator.py",
+      "accessCount": 2,
+      "lastAccessed": 1779785547927,
+      "type": "file"
+    },
+    {
+      "path": "README.md",
+      "accessCount": 2,
+      "lastAccessed": 1779786133521,
+      "type": "file"
+    },
+    {
+      "path": "LICENSE",
+      "accessCount": 2,
+      "lastAccessed": 1779786133857,
+      "type": "file"
+    },
+    {
+      "path": "scripts/g002_pipeline.py",
+      "accessCount": 1,
+      "lastAccessed": 1779779790167,
+      "type": "file"
+    },
+    {
+      "path": "scripts/g002_pipeline_v2.py",
+      "accessCount": 1,
+      "lastAccessed": 1779780787998,
+      "type": "file"
+    },
+    {
+      "path": "scripts/eval_harness.py",
+      "accessCount": 1,
+      "lastAccessed": 1779783541112,
+      "type": "file"
+    },
+    {
+      "path": "tests/__init__.py",
+      "accessCount": 1,
+      "lastAccessed": 1779783901750,
+      "type": "file"
+    },
+    {
+      "path": "scripts/onboarding_simulator.py",
+      "accessCount": 1,
+      "lastAccessed": 1779784357199,
+      "type": "file"
+    },
+    {
+      "path": "scripts/persona_preview.py",
+      "accessCount": 1,
+      "lastAccessed": 1779784812221,
+      "type": "file"
+    },
+    {
+      "path": "db/migrations/002_seed_probe_questions.sql",
+      "accessCount": 1,
+      "lastAccessed": 1779785054208,
+      "type": "file"
+    },
+    {
+      "path": "agent/__init__.py",
+      "accessCount": 1,
+      "lastAccessed": 1779785262496,
+      "type": "file"
+    },
+    {
+      "path": "pipeline/__init__.py",
+      "accessCount": 1,
+      "lastAccessed": 1779785279004,
+      "type": "file"
+    },
+    {
+      "path": "ui/__init__.py",
+      "accessCount": 1,
+      "lastAccessed": 1779785279325,
+      "type": "file"
+    },
+    {
+      "path": "agent/integrations.py",
+      "accessCount": 1,
+      "lastAccessed": 1779785286748,
+      "type": "file"
+    },
+    {
+      "path": "agent/router.py",
+      "accessCount": 1,
+      "lastAccessed": 1779785304477,
+      "type": "file"
+    },
+    {
+      "path": "agent/tools/__init__.py",
+      "accessCount": 1,
+      "lastAccessed": 1779785309536,
+      "type": "file"
+    },
+    {
+      "path": "agent/tools/google_calendar.py",
+      "accessCount": 1,
+      "lastAccessed": 1779785331079,
+      "type": "file"
+    },
+    {
+      "path": "agent/tools/local_files.py",
+      "accessCount": 1,
+      "lastAccessed": 1779785350834,
+      "type": "file"
+    },
+    {
+      "path": "agent/tools/web_search.py",
+      "accessCount": 1,
+      "lastAccessed": 1779785369695,
+      "type": "file"
+    },
+    {
+      "path": "ui/tui.py",
+      "accessCount": 1,
+      "lastAccessed": 1779785379562,
+      "type": "file"
+    },
+    {
+      "path": "db/migrations/004_seed_agent_tools.sql",
+      "accessCount": 1,
+      "lastAccessed": 1779785380594,
+      "type": "file"
+    },
+    {
+      "path": "tests/test_agent_tools.py",
+      "accessCount": 1,
+      "lastAccessed": 1779785444202,
+      "type": "file"
+    },
+    {
+      "path": "tests/test_tui_card.py",
+      "accessCount": 1,
+      "lastAccessed": 1779785477459,
+      "type": "file"
+    },
+    {
+      "path": "db/migrations/003_pipeline_session_indexes.sql",
+      "accessCount": 1,
+      "lastAccessed": 1779785564774,
+      "type": "file"
+    },
+    {
+      "path": "regret/__init__.py",
+      "accessCount": 1,
+      "lastAccessed": 1779785828436,
+      "type": "file"
+    },
+    {
+      "path": "regret/scheduler.py",
+      "accessCount": 1,
+      "lastAccessed": 1779785828824,
+      "type": "file"
+    },
+    {
+      "path": "regret/fingerprint.py",
+      "accessCount": 1,
+      "lastAccessed": 1779785829178,
+      "type": "file"
+    },
+    {
+      "path": "regret/slow_harm.py",
+      "accessCount": 1,
+      "lastAccessed": 1779785829501,
+      "type": "file"
+    },
+    {
+      "path": "regret/accuracy.py",
+      "accessCount": 1,
+      "lastAccessed": 1779785829843,
+      "type": "file"
+    },
+    {
+      "path": "tests/test_regret_fingerprint.py",
+      "accessCount": 1,
+      "lastAccessed": 1779785830194,
+      "type": "file"
+    },
+    {
+      "path": "web/tokens.css",
+      "accessCount": 1,
+      "lastAccessed": 1779786003829,
+      "type": "file"
+    },
+    {
+      "path": "web/index.html",
+      "accessCount": 1,
+      "lastAccessed": 1779786004171,
+      "type": "file"
+    },
+    {
+      "path": "tests/test_release_artifacts.py",
+      "accessCount": 1,
+      "lastAccessed": 1779786134213,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

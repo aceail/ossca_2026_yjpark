@@ -1,0 +1,14 @@
+# CodeGraph local index
+.codegraph/
+
+# Ollama models (large binaries, project-local)
+ollama_models/
+
+# Local SQLite DB (user data, never commit)
+tomorrow_you.db
+tomorrow_you.db-wal
+tomorrow_you.db-shm
+
+# OMC internal state cache (per-session)
+.omc/state/
+.omc/artifacts/

@@ -1,0 +1,76 @@
+/* 내일의 너 — Design System Tokens v1 (G008)
+ * 연계: UI_UX_DIRECTION_v1.md · FINAL_GOAL.md v2.3 §14 UI/UX
+ * WCAG AA 명도 대비 ≥ 4.5:1 (다크 5.5:1), 한국어 가독성 우선
+ */
+
+:root {
+  /* ── 페르소나별 색온도 ─────────────────────────────────────── */
+  --color-regret-bg: #3B6B9A;      /* 청회색, 내일의 나 */
+  --color-regret-bg-soft: #5A7080; /* 1년 후의 나, 객관 옵저버 */
+  --color-recovery-bg: #C4935A;    /* 황토, 친한 친구 ㅈㅅ */
+  --color-savage-accent: #A05A5A;  /* Savage 모드 액센트 */
+  --color-softstop-bg: #6B7280;    /* 중립 회색 */
+  --color-paradox-bg: #8B7A66;     /* 따뜻한 grey */
+
+  /* ── 표면 ──────────────────────────────────────────────────── */
+  --color-surface-light: #FAF8F4;
+  --color-surface-dark:  #16181D;
+  --color-text-light:    #1A1C20;
+  --color-text-dark:     #EDEAE3;
+  --color-text-muted:    #8A8B8E;
+  --color-border-subtle: #E5E2DC;
+  --color-border-dark:   #2B2E35;
+
+  /* ── 운동성 버튼 ───────────────────────────────────────────── */
+  --color-action-bg:     #2D3540;
+  --color-action-text:   #FAF8F4;
+  --color-action-timer:  #C4935A;
+
+  /* ── 안전 신호 ─────────────────────────────────────────────── */
+  --color-safety-soft:    #6B7280;
+  --color-safety-validate:#8B7A66;
+
+  /* ── Self-Destruct ─────────────────────────────────────────── */
+  --color-destruct-default: rgba(138, 139, 142, 0.4);
+  --color-destruct-hover:   rgba(160, 90, 90, 1.0);
+
+  /* ── 타이포그래피 ──────────────────────────────────────────── */
+  --font-fact:    'Noto Serif KR', serif;
+  --font-feeling: 'Noto Sans KR',  sans-serif;
+  --font-action:  'Noto Sans KR',  sans-serif;
+  --font-size-card:   17px;
+  --font-line-card:   1.6;
+  --font-size-header: 14px;
+  --font-size-meta:   12px;
+
+  /* ── 여백·radius ───────────────────────────────────────────── */
+  --space-card-padding:    24px;
+  --space-card-gap:        16px;
+  --space-sentence-gap:    10px;
+  --radius-card:           14px;
+  --radius-button:         12px;
+  --shadow-card:           0 6px 20px rgba(0, 0, 0, 0.12);
+
+  /* ── 마이크로 인터랙션 ─────────────────────────────────────── */
+  --fade-in-ms:    300;
+  --tap-feedback-ms: 400;
+  --blur-radius:   8px;
+  --timer-ring-stroke: 3px;
+}
+
+/* 자동 다크 모드 — 새벽 사용자 대비 5.5:1 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-text-light: var(--color-text-dark);
+    --color-surface-light: var(--color-surface-dark);
+    --color-border-subtle: var(--color-border-dark);
+  }
+}
+
+/* motion-reduce 우선 — 광고 팝업 회피 디테일 적용 */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --fade-in-ms: 0;
+    --tap-feedback-ms: 0;
+  }
+}
