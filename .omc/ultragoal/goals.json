@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-05-26T05:32:37.952Z",
-  "updatedAt": "2026-05-26T08:57:48.785Z",
+  "updatedAt": "2026-05-26T09:06:13.371Z",
   "briefPath": ".omc/ultragoal/brief.md",
   "goalsPath": ".omc/ultragoal/goals.json",
   "ledgerPath": ".omc/ultragoal/ledger.jsonl",
@@ -91,10 +91,12 @@
       "id": "G008-mvprelease",
       "title": "MVPRelease",
       "objective": "CLI MVP 패키징, README/기여가이드/라이선스/데모, 1명 사용자 2주 사용성 피드백 수집, OSSCA 멘토 리뷰 준비",
-      "status": "in_progress",
+      "status": "complete",
       "attempt": 0,
       "createdAt": "2026-05-26T05:32:37.952Z",
-      "updatedAt": "2026-05-26T05:32:37.952Z"
+      "updatedAt": "2026-05-26T09:06:13.371Z",
+      "evidence": "G008 MVPRelease v0.1 complete. README + LICENSE (dual-use) + web/tokens.css + web/index.html + tests/test_release_artifacts.py. 170 unittest green. git push (3d54040..c6a5a6f). 11 stories all complete.",
+      "completedAt": "2026-05-26T09:06:13.371Z"
     },
     {
       "id": "G009-evaluationharness",
@@ -130,6 +132,5 @@
       "completedAt": "2026-05-26T08:41:46.441Z"
     }
   ],
-  "claudeObjective": "Complete all ultragoal stories in .omc/ultragoal/goals.json: G001-designlockdown DesignLockdown; G002-ollamapoc OllamaPoC; G003-datamodel DataModel; G004-hitlprobeengine HITLProbeEngine; G005-onboardingflow OnboardingFlow; G006-avoidancesessionpipeline AvoidanceSessionPipeline; G007-regretfingerprint RegretFingerprint; G008-mvprelease MVPRelease",
-  "activeGoalId": "G008-mvprelease"
+  "claudeObjective": "Complete all ultragoal stories in .omc/ultragoal/goals.json: G001-designlockdown DesignLockdown; G002-ollamapoc OllamaPoC; G003-datamodel DataModel; G004-hitlprobeengine HITLProbeEngine; G005-onboardingflow OnboardingFlow; G006-avoidancesessionpipeline AvoidanceSessionPipeline; G007-regretfingerprint RegretFingerprint; G008-mvprelease MVPRelease"
 }
