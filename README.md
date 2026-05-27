@@ -21,6 +21,7 @@
 
 ## Quickstart
 
+### A. TUI MVP (CLI 즉시 실행)
 ```bash
 # 1. Ollama 서버 + 모델 준비
 ollama serve &
@@ -31,10 +32,31 @@ python3 -c "from db import open_db, migrate; migrate(open_db('tomorrow_you.db'))
 
 # 3. CLI MVP 실행
 python3 scripts/cli.py
-
-# (옵션) 웹 prototype 보기
-python3 -m http.server -d web 8000
 ```
+
+### B. 웹 SPA (Next.js + FastAPI)
+```bash
+# 1. Backend 의존성 (1회)
+pip install --user fastapi uvicorn pydantic cryptography
+
+# 2. Frontend 의존성 (1회)
+cd frontend && npm install && cd ..
+
+# 3. 동시 실행 (백엔드 :8001 + 프론트엔드 :3000)
+bash scripts/dev.sh
+# 또는 따로:
+bash scripts/dev.sh backend
+bash scripts/dev.sh frontend
+
+# 4. 브라우저 → http://localhost:3000
+
+# 통합 smoke check
+bash scripts/integration_check.sh
+```
+
+### C. 환경 변수
+- `cp .env.example .env`
+- `cp frontend/.env.example frontend/.env.local`
 
 ## 첫 사용 흐름
 

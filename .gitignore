@@ -14,3 +14,22 @@ tomorrow_you.db-shm
 .omc/artifacts/
 __pycache__/
 *.pyc
+
+# Next.js frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.turbo/
+frontend/next-env.d.ts
+frontend/.vercel/
+
+# Python package builds
+*.egg-info/
+build/
+dist/
+
+# Editor/OS
+.DS_Store
+.vscode/
+.idea/

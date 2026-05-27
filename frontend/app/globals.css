@@ -1,0 +1,174 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── 타이포그래피 ───────────────────────────────────── */
+  --font-fact: var(--font-fact-loaded), "Noto Serif KR", "Georgia", serif;
+  --font-feeling: var(--font-feeling-loaded), "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
+
+  --text-fact-size: 18px;
+  --text-fact-line: 1.55;
+  --text-body-size: 15px;
+  --text-body-line: 1.6;
+  --text-micro-size: 11px;
+  --text-micro-line: 1.45;
+  --text-micro-tracking: 0.04em;
+
+  /* ── 카드 레이아웃 ──────────────────────────────────── */
+  --card-max-width: 520px;
+  --card-padding: 24px;
+  --card-gap: 16px;
+  --card-radius: 8px;
+
+  /* ── 애니메이션 ─────────────────────────────────────── */
+  --anim-card-enter: cubic-bezier(0.22, 1, 0.36, 1);
+  --anim-card-duration: 300ms;
+  --anim-fade-duration: 200ms;
+
+  /* ── 라이트 테마 베이스 ─────────────────────────────── */
+  --color-bg-base: #F7F6F3;
+  --color-bg-card: #FFFFFF;
+  --color-text-primary: #1A1A1A;
+  --color-text-secondary: #6B6B6B;
+  --color-border-subtle: #E4E2DC;
+
+  /* ── regret 카드 (청회색) ───────────────────────────── */
+  --color-regret-bg: #F0F3F7;
+  --color-regret-border: #9BB0C8;
+  --color-regret-accent: #3B6B9A;
+  --color-regret-dot: #3B6B9A;
+
+  /* ── recovery 카드 (황토) ───────────────────────────── */
+  --color-recovery-bg: #FAF4EC;
+  --color-recovery-border: #C4935A;
+  --color-recovery-accent: #9A6430;
+  --color-recovery-dot: #C4935A;
+
+  /* ── soft_stop 카드 (중립 회색) ─────────────────────── */
+  --color-softstop-bg: #F5F5F5;
+  --color-softstop-border: #B0B0B0;
+  --color-softstop-accent: #555555;
+  --color-softstop-dot: #888888;
+
+  /* ── paradoxical_validation 카드 (크림) ─────────────── */
+  --color-paradox-bg: #FBF7F0;
+  --color-paradox-border: #D4B896;
+  --color-paradox-accent: #7A5C3A;
+  --color-paradox-dot: #D4B896;
+
+  /* ── 운동성 버튼 ────────────────────────────────────── */
+  --color-action-bg: #1A1A1A;
+  --color-action-text: #FFFFFF;
+  --color-action-hover: #3B3B3B;
+  --color-timer-regret: #3B6B9A;
+  --color-timer-recovery: #C4935A;
+
+  /* ── 오버레이 ───────────────────────────────────────── */
+  --color-overlay-dim: rgba(0, 0, 0, 0.15);
+}
+
+/* ── 다크 테마 ──────────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg-base: #141414;
+    --color-bg-card: #1E1E1E;
+    --color-text-primary: #EDEDED;
+    --color-text-secondary: #888888;
+    --color-border-subtle: #2C2C2C;
+
+    --color-regret-bg: #1A2130;
+    --color-regret-border: #3E6080;
+    --color-regret-accent: #7AADCF;
+    --color-regret-dot: #5A90B8;
+
+    --color-recovery-bg: #211A10;
+    --color-recovery-border: #7A5530;
+    --color-recovery-accent: #D4A05A;
+    --color-recovery-dot: #C4935A;
+
+    --color-softstop-bg: #1A1A1A;
+    --color-softstop-border: #444444;
+    --color-softstop-accent: #AAAAAA;
+    --color-softstop-dot: #666666;
+
+    --color-paradox-bg: #1E1810;
+    --color-paradox-border: #6B4E30;
+    --color-paradox-accent: #C4956A;
+    --color-paradox-dot: #A07040;
+
+    --color-action-bg: #EDEDED;
+    --color-action-text: #141414;
+    --color-action-hover: #FFFFFF;
+  }
+}
+
+/* ── 모션 감소 ──────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── 기본 스타일 ─────────────────────────────────────────── */
+body {
+  background-color: var(--color-bg-base);
+  color: var(--color-text-primary);
+  font-family: var(--font-feeling);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── 카드 등장 애니메이션 ───────────────────────────────── */
+@keyframes card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+@keyframes timer-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
+.card-enter {
+  animation: card-enter var(--anim-card-duration) var(--anim-card-enter) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-enter {
+    animation: fade-in 200ms ease both;
+  }
+}
+
+/* ── 레거시 호환 유틸리티 ───────────────────────────────── */
+.animate-fade-in {
+  animation: fade-in 0.6s ease-out forwards;
+}
+
+.animate-fade-in-delay {
+  opacity: 0;
+  animation: fade-in 0.6s ease-out 1s forwards;
+}
+
+.animate-fade-in-cta {
+  opacity: 0;
+  animation: fade-in 0.5s ease-out 2s forwards;
+}
