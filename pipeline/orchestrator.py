@@ -17,7 +17,7 @@ from typing import Any
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from db import open_db, migrate, get_persona  # noqa: E402
+from db import open_db, migrate, get_persona, upsert_prompt_version  # noqa: E402
 from persona import seed_builtin_prompts, FORBIDDEN_GROUPS  # noqa: E402
 from probe import ProbeEngine, select_active_prompt  # noqa: E402
 from regret import build_ratio_hint, compute_signal_level, recommend_card_type  # noqa: E402
@@ -149,6 +149,7 @@ class ScenarioCard:
     safety_message: str | None
     signal_level: str = "normal"
     moral_licensing_nudge: str | None = None
+    prompt_version_id: int | None = None  # P0-12 — 실제 사용된 system_prompt 추적
 
 
 @dataclass(frozen=True)
@@ -308,6 +309,14 @@ class SessionOrchestrator:
         if timeline_hint:
             user_msg = f"[타임라인: {timeline_hint}]\n{avoidance_input}"
 
+        # P0-12: 실제 LLM에게 전달되는 정확한 system_prompt를 PromptVersion으로 추적
+        prompt_name = f"persona_{persona_id}" if persona_id else "fallback"
+        prompt_version_id = upsert_prompt_version(
+            self.conn,
+            name=prompt_name,
+            system_prompt=system_prompt or "",
+        )
+
         # LLM 호출
         try:
             raw = _call_ollama(system_prompt or "", user_msg)
@@ -324,6 +333,7 @@ class SessionOrchestrator:
                 safety_message=f"시나리오 생성 중 오류가 발생했습니다. ({exc})",
                 signal_level=signal,
                 moral_licensing_nudge=nudge,
+                prompt_version_id=prompt_version_id,
             )
 
         card_type = parsed.get("card_type", "regret")
@@ -343,6 +353,7 @@ class SessionOrchestrator:
                 safety_message=msg,
                 signal_level=signal,
                 moral_licensing_nudge=nudge,
+                prompt_version_id=prompt_version_id,
             )
 
         # regret / recovery
@@ -364,6 +375,7 @@ class SessionOrchestrator:
                 safety_message=SAFETY_SOFT_MESSAGE,
                 signal_level=signal,
                 moral_licensing_nudge=nudge,
+                prompt_version_id=prompt_version_id,
             )
 
         return self._insert_card(
@@ -376,6 +388,7 @@ class SessionOrchestrator:
             safety_message=None,
             signal_level=signal,
             moral_licensing_nudge=nudge,
+            prompt_version_id=prompt_version_id,
         )
 
     def _moral_licensing_nudge(self, user_id: str) -> str | None:
@@ -400,6 +413,7 @@ class SessionOrchestrator:
         safety_message: str | None,
         signal_level: str = "normal",
         moral_licensing_nudge: str | None = None,
+        prompt_version_id: int | None = None,
     ) -> ScenarioCard:
         now = datetime.now(timezone.utc).isoformat()
         cur = self.conn.execute(
@@ -437,6 +451,7 @@ class SessionOrchestrator:
             safety_message=safety_message,
             signal_level=signal_level,
             moral_licensing_nudge=moral_licensing_nudge,
+            prompt_version_id=prompt_version_id,
         )
 
     # ── 5. 결정 기록 ──────────────────────────────────────────────

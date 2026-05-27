@@ -163,8 +163,8 @@ def generate_scenario(
     conn.execute(
         """INSERT INTO ToolInvocation
            (user_id, avoidance_session_id, persona_id, agent_tool_id,
-            input_json, output_json, latency_ms, invoked_at)
-           VALUES (?, ?, ?, ?, ?, ?, NULL, datetime('now'))""",
+            input_json, output_json, latency_ms, invoked_at, prompt_version_id)
+           VALUES (?, ?, ?, ?, ?, ?, NULL, datetime('now'), ?)""",
         (
             sess["user_id"],
             session_id,
@@ -172,6 +172,7 @@ def generate_scenario(
             tool_id,
             f'{{"action":"generate_scenario","session_id":{session_id}}}',
             f'{{"card_id":{card.id},"card_type":"{card.card_type}"}}',
+            card.prompt_version_id,
         ),
     )
     conn.commit()

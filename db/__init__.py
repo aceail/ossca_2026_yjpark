@@ -3,6 +3,18 @@
 Module entry points:
     from db import open_db, migrate, list_personas
 """
-from .schema import open_db, migrate, list_personas, get_persona
+from .schema import (
+    open_db,
+    migrate,
+    list_personas,
+    get_persona,
+    upsert_prompt_version,
+)
 
-__all__ = ["open_db", "migrate", "list_personas", "get_persona"]
+__all__ = [
+    "open_db",
+    "migrate",
+    "list_personas",
+    "get_persona",
+    "upsert_prompt_version",
+]

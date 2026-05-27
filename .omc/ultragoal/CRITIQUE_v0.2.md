@@ -95,11 +95,14 @@ v0.2를 "출시"라 부른 건 잘못된 표현 — 현재는 **v0.2 prototype +
 **Crypto key derivation**:
 - [x] P0-14 `agent/integrations.py` `TOMORROW_YOU_FERNET_PASSPHRASE` 환경변수 지원 — PBKDF2-HMAC-SHA256 (200k iters, OWASP 2023) + 자동 생성된 salt 파일로 키 도출. passphrase 경로에선 평문 키 파일이 디스크에 남지 않음 (salt 단독으론 키 복원 불가). 우선순위: ENV KEY > ENV PASSPHRASE > KEY_FILE > new random.
 
+### v0.3 sprint 6 (closed 2026-05-27)
+**PromptVersion runtime linkage**:
+- [x] P0-12 마이그레이션 008 — `ToolInvocation.prompt_version_id` FK 추가 + index. 새 helper `db.upsert_prompt_version(name, system_prompt)` — version=SHA256(prompt)[:12]로 결정적 idempotent. orchestrator는 LLM 호출 직전 prompt_version_id를 산출해 `ScenarioCard` dataclass와 `ToolInvocation` 행에 모두 기록. elevated 신호로 prefix가 들어가면 자동으로 새 version이 생성돼 평가·재현 시 정확한 system_prompt 복원이 가능.
+
 ### v0.3 본격 (다음 라운드)
 **Complex**:
 - P0-8 API 인증 (간단 디바이스 토큰 + Authorization 헤더)
 - P0-10 평가 baseline 재정의 (3중 진실원 통합, repair loop 추가)
-- P0-12 PromptVersion → 실 사용
 - P0-15 agent tool 활성화 사용자 명시 동의 게이트
 - P0-16 작업 큐 + idempotency
 

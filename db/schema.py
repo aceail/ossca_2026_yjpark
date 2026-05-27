@@ -83,3 +83,32 @@ def list_personas(conn: sqlite3.Connection, *, builtin_only: bool = False) -> li
 
 def get_persona(conn: sqlite3.Connection, name: str) -> sqlite3.Row | None:
     return conn.execute("SELECT * FROM Persona WHERE name = ?", (name,)).fetchone()
+
+
+def upsert_prompt_version(
+    conn: sqlite3.Connection,
+    *,
+    name: str,
+    system_prompt: str,
+    notes: str | None = None,
+) -> int:
+    """P0-12: 같은 (name, system_prompt 해시) 조합엔 같은 PromptVersion.id 반환.
+
+    version = SHA256(system_prompt)[:12] — 같은 내용이면 같은 version이라
+    재호출이 자연 idempotent. 시나리오 생성 직전 호출해 ToolInvocation에
+    prompt_version_id로 기록하면 평가·재현 시 정확한 system_prompt를 복원할 수 있다.
+    """
+    version = _sha256(system_prompt)[:12]
+    row = conn.execute(
+        "SELECT id FROM PromptVersion WHERE name = ? AND version = ?",
+        (name, version),
+    ).fetchone()
+    if row:
+        return row["id"]
+    cur = conn.execute(
+        """INSERT INTO PromptVersion (name, version, system_prompt, notes, created_at)
+           VALUES (?, ?, ?, ?, ?)""",
+        (name, version, system_prompt, notes, datetime.now(timezone.utc).isoformat()),
+    )
+    conn.commit()
+    return cur.lastrowid
