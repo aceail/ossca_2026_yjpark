@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#1A1A1A"/>
+  <g fill="#F7F6F3" stroke="#F7F6F3" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
+    <!-- 모래시계 글리프: 미래 자아가 현재를 보는 시간 메타포 -->
+    <path d="M150 90 H362 M150 422 H362" fill="none"/>
+    <path d="M170 90 V160 L256 256 L342 160 V90 Z M170 422 V352 L256 256 L342 352 V422 Z" fill="#F7F6F3"/>
+    <!-- 모래 알갱이 -->
+    <circle cx="256" cy="240" r="6" fill="#1A1A1A"/>
+    <circle cx="256" cy="268" r="4" fill="#1A1A1A"/>
+  </g>
+</svg>
