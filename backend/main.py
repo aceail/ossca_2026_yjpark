@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 from pathlib import Path
@@ -17,18 +18,52 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from db import open_db, migrate
 from persona import seed_builtin_prompts
+from pipeline.folder_watch import scan_open_tasks
 from backend.deps import DB_PATH
 from backend.api import users, personas, onboarding, sessions, regret, safety, tone_feedback, consent, chat, tasks
 
 
+async def _folder_watch_loop(interval_seconds: int) -> None:
+    """Wave 2: 주기 폴더 스캔 loop. lifespan task로 실행."""
+    while True:
+        try:
+            await asyncio.sleep(interval_seconds)
+            conn = open_db(DB_PATH)
+            try:
+                scan_open_tasks(conn)
+            finally:
+                conn.close()
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            # 스캔 실패가 backend를 죽이지 않게 — 다음 cycle로
+            continue
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """시작 시 DB migrate + seed_builtin_prompts."""
+    """시작 시 DB migrate + seed_builtin_prompts + folder watch task."""
     conn = open_db(DB_PATH)
     migrate(conn)
     seed_builtin_prompts(conn)
     conn.close()
-    yield
+
+    watch_task = None
+    if os.environ.get("NAEIL_DISABLE_WATCH") != "1":
+        interval_min = int(os.environ.get("NAEIL_WATCH_INTERVAL_MIN", "30"))
+        watch_task = asyncio.create_task(
+            _folder_watch_loop(max(interval_min, 1) * 60)
+        )
+
+    try:
+        yield
+    finally:
+        if watch_task:
+            watch_task.cancel()
+            try:
+                await watch_task
+            except asyncio.CancelledError:
+                pass
 
 
 app = FastAPI(
