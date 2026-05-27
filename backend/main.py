@@ -57,6 +57,24 @@ async def _followup_loop(interval_seconds: int) -> None:
             continue
 
 
+async def _reflection_loop(interval_seconds: int) -> None:
+    """Sprint 21: 주기 self-reflection. 사용자별 cooldown 내장."""
+    from pipeline.reflection import run_reflection_for_all
+
+    while True:
+        try:
+            await asyncio.sleep(interval_seconds)
+            conn = open_db(DB_PATH)
+            try:
+                run_reflection_for_all(conn)
+            finally:
+                conn.close()
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            continue
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """시작 시 DB migrate + seed_builtin_prompts + folder watch task."""
@@ -67,6 +85,7 @@ async def lifespan(app: FastAPI):
 
     watch_task = None
     followup_task = None
+    reflection_task = None
     if os.environ.get("NAEIL_DISABLE_WATCH") != "1":
         interval_min = int(os.environ.get("NAEIL_WATCH_INTERVAL_MIN", "30"))
         watch_task = asyncio.create_task(
@@ -77,11 +96,17 @@ async def lifespan(app: FastAPI):
         followup_task = asyncio.create_task(
             _followup_loop(max(fu_min, 1) * 60)
         )
+    if os.environ.get("NAEIL_DISABLE_REFLECTION") != "1":
+        # 기본: 12시간 주기 체크 (실 실행은 user-별 cooldown 6일에 걸림)
+        ref_hours = int(os.environ.get("NAEIL_REFLECTION_INTERVAL_HOURS", "12"))
+        reflection_task = asyncio.create_task(
+            _reflection_loop(max(ref_hours, 1) * 3600)
+        )
 
     try:
         yield
     finally:
-        for t in (watch_task, followup_task):
+        for t in (watch_task, followup_task, reflection_task):
             if t:
                 t.cancel()
                 try:
