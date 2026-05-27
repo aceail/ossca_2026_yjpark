@@ -23,6 +23,14 @@ const TONE_OPTIONS: { value: Persona["tone_mode"]; label: string }[] = [
 
 const AVATAR_PRESETS = ["#3B6B9A", "#5A7080", "#C4935A", "#9A6430", "#6B7280", "#7C6A9A"];
 
+// P0-21: Savage opt-in 가드 — 직설적 톤은 임상 위험 큼
+const SAVAGE_WARNING =
+  "이 페르소나는 직설적이고 강한 톤이에요. 최근 자해 사고나 깊은 우울감이 있다면 권하지 않아요.";
+const SAVAGE_CONFIRM = `${SAVAGE_WARNING}\n\n그래도 사용하시겠어요?`;
+
+const INTENT_PROMPT_CONFIRM =
+  "의도를 한 줄도 적지 않았어요. 의도를 기록해두면 나중에 이 페르소나가 또 다른 미루기 대상이 되었는지 점검할 수 있어요. 그래도 만들까요?";
+
 interface AuditViolation {
   field: string;
   group: string;
@@ -43,6 +51,7 @@ interface CustomFormState {
   forbidden_topics: string[];
   avatar_color: string;
   avatar_icon: string;
+  intent_reason: string;  // P0-21: 의도 기록 (client-side only)
 }
 
 const EMPTY_FORM: CustomFormState = {
@@ -54,6 +63,7 @@ const EMPTY_FORM: CustomFormState = {
   forbidden_topics: [],
   avatar_color: AVATAR_PRESETS[0],
   avatar_icon: "✨",
+  intent_reason: "",
 };
 
 export default function PersonasPage() {
@@ -113,6 +123,10 @@ export default function PersonasPage() {
 
   const handleActivate = async (persona: Persona) => {
     if (!userId) return;
+    // P0-21: Savage opt-in 가드
+    if (persona.tone_mode === "Savage" && !window.confirm(SAVAGE_CONFIRM)) {
+      return;
+    }
     try {
       const res = await fetch(`${API_BASE}/api/users/${userId}/active-persona`, {
         method: "POST",
@@ -148,13 +162,24 @@ export default function PersonasPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userId) return;
+    // P0-21: Savage opt-in 가드 (Custom Builder)
+    if (form.tone_mode === "Savage" && !window.confirm(SAVAGE_CONFIRM)) {
+      return;
+    }
+    // P0-21: 의도 미기록 시 부드러운 확인
+    if (form.intent_reason.trim().length === 0 && !window.confirm(INTENT_PROMPT_CONFIRM)) {
+      return;
+    }
     setSubmitting(true);
     setViolations([]);
+    // intent_reason은 client-side 가드용 — 백엔드 페이로드에서 제외
+    const { intent_reason: _intent, ...payload } = form;
+    void _intent;
     try {
       const res = await fetch(`${API_BASE}/api/personas/custom`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: userId, ...form }),
+        body: JSON.stringify({ user_id: userId, ...payload }),
       });
       if (res.ok) {
         const newPersona = await res.json();
@@ -378,6 +403,15 @@ export default function PersonasPage() {
                   </option>
                 ))}
               </select>
+              {form.tone_mode === "Savage" && (
+                <p
+                  className="text-[11px] mt-1.5"
+                  style={{ color: "var(--color-text-secondary)" }}
+                  role="note"
+                >
+                  ⚠ {SAVAGE_WARNING}
+                </p>
+              )}
             </div>
 
             {/* Voice Style */}
@@ -420,6 +454,38 @@ export default function PersonasPage() {
               />
               <p className="text-[11px] mt-0.5" style={{ color: "var(--color-text-secondary)" }}>
                 {form.greeting.length}/80
+              </p>
+            </div>
+
+            {/* P0-21: 의도 기록 — 페르소나 자체가 또 다른 미루기 대상이 되는 걸 미리 점검 */}
+            <div>
+              <label
+                className="block text-[12px] mb-1"
+                style={{ color: "var(--color-text-secondary)" }}
+                htmlFor="intent-reason"
+              >
+                왜 이 페르소나를 만드세요? <span className="opacity-60">(나만 봐요)</span>
+              </label>
+              <textarea
+                id="intent-reason"
+                value={form.intent_reason}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, intent_reason: e.target.value.slice(0, 200) }))
+                }
+                placeholder="예: 마감 직전에 나를 깨워줄 누군가가 필요해서"
+                rows={2}
+                className="w-full px-3 py-2 text-[13px] rounded-lg outline-none resize-none"
+                style={{
+                  backgroundColor: "var(--color-bg-base)",
+                  border: "1px solid var(--color-border-subtle)",
+                  color: "var(--color-text-primary)",
+                }}
+              />
+              <p
+                className="text-[11px] mt-0.5"
+                style={{ color: "var(--color-text-secondary)" }}
+              >
+                {form.intent_reason.length}/200 · 의도를 적어두면 나중에 점검할 수 있어요
               </p>
             </div>
 

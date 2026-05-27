@@ -81,6 +81,11 @@ v0.2를 "출시"라 부른 건 잘못된 표현 — 현재는 **v0.2 prototype +
 - [x] P0-11 `regret/ratio.py` `recommend_card_type` + `build_ratio_hint` → 최근 5 카드 중 한쪽 ≥0.7이면 반대 유형 권장 hint를 `system_prompt`에 주입. soft_stop/paradox는 분모에서 제외.
 - [x] 설계 결정: ratio hint와 `elevated` 신호는 함께 적용 (high만 soft_stop 강제로 차단). `failure_imagery_ratio`가 ratio skew와 동치이므로 elevated와 ratio hint를 분리하면 hint가 영영 적용되지 않는다.
 
+### v0.3 sprint 3 (closed 2026-05-27)
+**UX safety gates**:
+- [x] P0-21 Savage opt-in — `personas/page.tsx`에서 빌트인 Savage 활성화 / Custom Builder Savage 톤 제출 시 confirm dialog ("자해 사고나 깊은 우울감이 있다면 권하지 않아요"). Builder 톤 셀렉터 아래 inline 경고 라인.
+- [x] P0-21 Custom Builder 의도 확인 — "왜 이 페르소나를 만드세요?" textarea (200자, client-side only). 비어있을 시 부드러운 confirm — 페르소나 자체가 또 다른 미루기 대상이 되는지 점검 가능.
+
 ### v0.3 본격 (다음 라운드)
 **Complex**:
 - P0-8 API 인증 (간단 디바이스 토큰 + Authorization 헤더)
@@ -90,7 +95,6 @@ v0.2를 "출시"라 부른 건 잘못된 표현 — 현재는 **v0.2 prototype +
 - P0-15 agent tool 활성화 사용자 명시 동의 게이트
 - P0-16 작업 큐 + idempotency
 - P0-19 Typography 위계 재검토 (Serif/Sans 역할 교환 또는 단일 fontfamily)
-- P0-21 Custom Builder UX 가드 — "왜 이 페르소나를 만드세요?" 의도 확인
 
 ## 5. OSSCA 멘토 제출 전 필수 게이트
 
