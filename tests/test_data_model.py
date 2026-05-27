@@ -25,7 +25,7 @@ EXPECTED_TABLES = {
     "Persona",
 }
 
-BUILTIN_PERSONAS = {"내일의 나", "1년 후의 나", "친한 친구", "엄격한 코치", "기록자"}
+BUILTIN_PERSONAS = {"내일의 나", "1년 후의 나", "친한 친구", "뼈때리는 친구", "엄격한 코치", "기록자"}
 
 
 def now() -> str:

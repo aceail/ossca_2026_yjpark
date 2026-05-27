@@ -47,6 +47,15 @@ export const BUILTIN_PERSONAS: Omit<Persona, "id">[] = [
     avatar_icon: "🎯",
   },
   {
+    name: "뼈때리는 친구",
+    perspective: "2nd",
+    tone_mode: "Savage",
+    voice_style: "친구 2인칭, 직설적, 사정 봐주지 않음 (정체성 비난 X)",
+    greeting: "야 진짜로. 안 하면 어떡할 건데?",
+    avatar_color: "#7A2424",
+    avatar_icon: "🗯️",
+  },
+  {
     name: "기록자",
     perspective: "3rd",
     tone_mode: "Quiet",

@@ -111,7 +111,7 @@ class TestRenderCardRecovery(unittest.TestCase):
         self.assertIn("🤝", self.card)
 
     def test_greeting_in_output(self):
-        self.assertIn("야 너", self.card)
+        self.assertIn("야 지금", self.card)
 
     def test_micro_action_in_output(self):
         self.assertIn("갈아입는다", self.card)

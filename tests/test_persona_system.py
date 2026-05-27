@@ -74,7 +74,7 @@ class TestBuiltinPersonas(unittest.TestCase):
             Path(str(self.db_path) + suffix).unlink(missing_ok=True)
 
     def test_builtin_count(self):
-        self.assertEqual(len(BUILTIN_PERSONAS), 5)
+        self.assertEqual(len(BUILTIN_PERSONAS), 6)
 
     def test_perspective_variety(self):
         perspectives = {p.perspective for p in BUILTIN_PERSONAS}
@@ -86,7 +86,7 @@ class TestBuiltinPersonas(unittest.TestCase):
 
     def test_seed_fills_system_prompts(self):
         updated = seed_builtin_prompts(self.conn)
-        self.assertEqual(updated, 5)
+        self.assertEqual(updated, 6)
         morning = get_persona(self.conn, "내일의 나")
         self.assertIsNotNone(morning["system_prompt_override"])
         self.assertIn("1인칭", morning["system_prompt_override"])
@@ -147,9 +147,9 @@ class TestSavePersona(unittest.TestCase):
         self.assertEqual(row["is_builtin"], 0)
 
     def test_builtin_seed_via_migration_present(self):
-        # 001_initial.sql 이미 5 default 페르소나 INSERT
+        # 001_initial.sql 5 default INSERT + 006_add_savage_persona.sql 1 INSERT = 6
         builtins = list_personas(self.conn, builtin_only=True)
-        self.assertEqual(len(builtins), 5)
+        self.assertEqual(len(builtins), 6)
 
 
 if __name__ == "__main__":
