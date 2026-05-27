@@ -86,6 +86,11 @@ v0.2를 "출시"라 부른 건 잘못된 표현 — 현재는 **v0.2 prototype +
 - [x] P0-21 Savage opt-in — `personas/page.tsx`에서 빌트인 Savage 활성화 / Custom Builder Savage 톤 제출 시 confirm dialog ("자해 사고나 깊은 우울감이 있다면 권하지 않아요"). Builder 톤 셀렉터 아래 inline 경고 라인.
 - [x] P0-21 Custom Builder 의도 확인 — "왜 이 페르소나를 만드세요?" textarea (200자, client-side only). 비어있을 시 부드러운 confirm — 페르소나 자체가 또 다른 미루기 대상이 되는지 점검 가능.
 
+### v0.3 sprint 4 (closed 2026-05-27)
+**Typography hierarchy**:
+- [x] P0-19 globals.css `@theme` 타이포 변수 강화 — fact 18→19px·line 1.55→1.7·weight 500·tracking -0.005em (한국어 Serif 가독성), body 15→16px (한국어 본문 표준), 새 헤더 단계 `--text-h1-*` / `--text-h2-*` 변수 추가로 inline 사이즈 통합 준비. 위계 비율 11→16→19→20→24 (~1.3x).
+- [x] ScenarioCard fact 레이어가 새 weight/tracking 변수 사용. feeling/UI는 그대로 — Sans 본문 weight 400 유지.
+
 ### v0.3 본격 (다음 라운드)
 **Complex**:
 - P0-8 API 인증 (간단 디바이스 토큰 + Authorization 헤더)
@@ -94,7 +99,6 @@ v0.2를 "출시"라 부른 건 잘못된 표현 — 현재는 **v0.2 prototype +
 - P0-14 Fernet key OS keychain 또는 PBKDF2
 - P0-15 agent tool 활성화 사용자 명시 동의 게이트
 - P0-16 작업 큐 + idempotency
-- P0-19 Typography 위계 재검토 (Serif/Sans 역할 교환 또는 단일 fontfamily)
 
 ## 5. OSSCA 멘토 제출 전 필수 게이트
 

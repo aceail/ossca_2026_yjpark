@@ -1,17 +1,34 @@
 @import "tailwindcss";
 
 @theme {
-  /* ── 타이포그래피 ───────────────────────────────────── */
+  /* ── 타이포그래피 ─────────────────────────────────────
+     위계: micro(11) → body(16) → fact(19) → h2(20) → h1(24).
+     Serif(fact)는 한국어 가독성을 위해 weight 500 + line 1.7.
+     Sans(feeling)는 모든 UI 본문·헤더 — 한국어 기본 16px.
+  */
   --font-fact: var(--font-fact-loaded), "Noto Serif KR", "Georgia", serif;
   --font-feeling: var(--font-feeling-loaded), "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
 
-  --text-fact-size: 18px;
-  --text-fact-line: 1.55;
-  --text-body-size: 15px;
-  --text-body-line: 1.6;
+  --text-fact-size: 19px;
+  --text-fact-line: 1.7;
+  --text-fact-weight: 500;
+  --text-fact-tracking: -0.005em;
+
+  --text-body-size: 16px;
+  --text-body-line: 1.65;
+
   --text-micro-size: 11px;
   --text-micro-line: 1.45;
   --text-micro-tracking: 0.04em;
+
+  /* 헤더 위계 — 페이지/섹션 제목용 (Sans, 기존 inline 값 통합) */
+  --text-h1-size: 24px;
+  --text-h1-line: 1.35;
+  --text-h1-weight: 600;
+
+  --text-h2-size: 20px;
+  --text-h2-line: 1.4;
+  --text-h2-weight: 600;
 
   /* ── 카드 레이아웃 ──────────────────────────────────── */
   --card-max-width: 520px;

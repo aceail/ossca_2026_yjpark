@@ -258,7 +258,8 @@ export function ScenarioCard({
                 fontSize: "var(--text-fact-size)",
                 lineHeight: "var(--text-fact-line)",
                 color: "var(--color-text-primary)",
-                fontWeight: 400,
+                fontWeight: "var(--text-fact-weight)",
+                letterSpacing: "var(--text-fact-tracking)",
               }}
             >
               {card.fact}
