@@ -5,14 +5,19 @@
   - 폴백: base64 인코딩 (cryptography 미설치 환경, 보안 약함)
     → 폴백 사용 시 README 경고 참조
 
-키 관리:
-  - 환경변수 TOMORROW_YOU_FERNET_KEY 우선
-  - 없으면 ~/.tomorrow_you/fernet.key 자동 생성·저장
+키 관리 (P0-14, 우선순위):
+  1. 환경변수 TOMORROW_YOU_FERNET_KEY (raw Fernet key)
+  2. 환경변수 TOMORROW_YOU_FERNET_PASSPHRASE
+     → PBKDF2-HMAC-SHA256 (200k iters) + salt(~/.tomorrow_you/fernet.salt) 도출
+       평문 키가 디스크에 남지 않음 (salt만 남음, salt는 단독으론 무용지물)
+  3. ~/.tomorrow_you/fernet.key (자동 생성된 random key, 평문 저장)
+  4. 신규 random key 생성·저장
 """
 
 from __future__ import annotations
 
 import base64
+import hashlib
 import os
 import sqlite3
 from datetime import datetime, timezone
@@ -33,13 +38,43 @@ except ImportError:
 
 _KEY_DIR = Path.home() / ".tomorrow_you"
 _KEY_FILE = _KEY_DIR / "fernet.key"
+_SALT_FILE = _KEY_DIR / "fernet.salt"
+
+PBKDF2_ITERATIONS = 200_000  # OWASP 2023 권장 SHA-256 기준
+SALT_BYTES = 16
+
+
+def _load_or_create_salt() -> bytes:
+    """PBKDF2용 salt를 로드하거나 새로 생성 (16 random bytes)."""
+    if _SALT_FILE.exists():
+        return _SALT_FILE.read_bytes().strip()
+    _KEY_DIR.mkdir(parents=True, exist_ok=True)
+    salt = os.urandom(SALT_BYTES)
+    _SALT_FILE.write_bytes(salt)
+    return salt
+
+
+def _derive_key_from_passphrase(passphrase: str, salt: bytes) -> bytes:
+    """PBKDF2-HMAC-SHA256 → Fernet 호환 32-byte urlsafe base64 키."""
+    derived = hashlib.pbkdf2_hmac(
+        "sha256",
+        passphrase.encode("utf-8"),
+        salt,
+        PBKDF2_ITERATIONS,
+    )
+    return base64.urlsafe_b64encode(derived)
 
 
 def _load_or_create_key() -> bytes:
-    """환경변수 또는 로컬 파일에서 Fernet 키 로드. 없으면 자동 생성."""
+    """우선순위: ENV FERNET_KEY > ENV PASSPHRASE+salt > KEY_FILE > new random."""
     env_key = os.environ.get("TOMORROW_YOU_FERNET_KEY")
     if env_key:
         return env_key.encode() if isinstance(env_key, str) else env_key
+
+    passphrase = os.environ.get("TOMORROW_YOU_FERNET_PASSPHRASE")
+    if passphrase:
+        salt = _load_or_create_salt()
+        return _derive_key_from_passphrase(passphrase, salt)
 
     if _KEY_FILE.exists():
         return _KEY_FILE.read_bytes().strip()

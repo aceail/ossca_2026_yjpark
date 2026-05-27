@@ -91,12 +91,15 @@ v0.2를 "출시"라 부른 건 잘못된 표현 — 현재는 **v0.2 prototype +
 - [x] P0-19 globals.css `@theme` 타이포 변수 강화 — fact 18→19px·line 1.55→1.7·weight 500·tracking -0.005em (한국어 Serif 가독성), body 15→16px (한국어 본문 표준), 새 헤더 단계 `--text-h1-*` / `--text-h2-*` 변수 추가로 inline 사이즈 통합 준비. 위계 비율 11→16→19→20→24 (~1.3x).
 - [x] ScenarioCard fact 레이어가 새 weight/tracking 변수 사용. feeling/UI는 그대로 — Sans 본문 weight 400 유지.
 
+### v0.3 sprint 5 (closed 2026-05-27)
+**Crypto key derivation**:
+- [x] P0-14 `agent/integrations.py` `TOMORROW_YOU_FERNET_PASSPHRASE` 환경변수 지원 — PBKDF2-HMAC-SHA256 (200k iters, OWASP 2023) + 자동 생성된 salt 파일로 키 도출. passphrase 경로에선 평문 키 파일이 디스크에 남지 않음 (salt 단독으론 키 복원 불가). 우선순위: ENV KEY > ENV PASSPHRASE > KEY_FILE > new random.
+
 ### v0.3 본격 (다음 라운드)
 **Complex**:
 - P0-8 API 인증 (간단 디바이스 토큰 + Authorization 헤더)
 - P0-10 평가 baseline 재정의 (3중 진실원 통합, repair loop 추가)
 - P0-12 PromptVersion → 실 사용
-- P0-14 Fernet key OS keychain 또는 PBKDF2
 - P0-15 agent tool 활성화 사용자 명시 동의 게이트
 - P0-16 작업 큐 + idempotency
 

@@ -68,6 +68,16 @@
 - `regret/fingerprint.py` embedding은 hash 기반 — sentence-transformers 도입 시 사용자 데이터가 외부 모델에 전달되지 않도록 로컬 추론만 허용 예정
 - Ollama 서버 인증 없음 — 로컬 1인용 가정. 멀티 사용자 환경 배포 금지.
 
+## Fernet 키 관리 (v0.3 P0-14)
+
+OAuth 토큰을 암호화하는 Fernet 키 우선순위:
+
+1. **환경변수 `TOMORROW_YOU_FERNET_KEY`** — raw Fernet key (44자 urlsafe-b64). 운영 환경 권장.
+2. **환경변수 `TOMORROW_YOU_FERNET_PASSPHRASE`** — passphrase에서 PBKDF2-HMAC-SHA256 (200,000 iters, OWASP 2023 baseline) + 자동 생성 salt(`~/.tomorrow_you/fernet.salt`)로 키 도출. **평문 키가 디스크에 남지 않음.** 1Password 등 비밀번호 관리자와 결합 권장.
+3. **`~/.tomorrow_you/fernet.key`** — 자동 생성된 random key (평문 저장, dev 기본값). 운영에선 1·2로 교체 권장.
+
+passphrase 경로에서 salt 파일만 백업·이관하면 다른 머신에서도 동일 키를 재도출할 수 있다 (passphrase가 같다는 전제).
+
 ## 외부 의존성 보안
 
 - Ollama (LLM) — 로컬 호스팅, 외부 통신 X (모델 다운로드 제외)
