@@ -21,7 +21,7 @@
 - **외부 캘린더 양방향** — ICS feed로 Google Calendar / Apple Calendar 구독 가능.
 - **윤리 디자인** — 11+ 안전 메커니즘 (Slow Harm·Moral Licensing·Savage opt-in·Self-Destruct·token 인증·동의 게이트·idempotency).
 
-## 빠른 시작 (Local 모드)
+## Quickstart (Local 모드)
 
 ### 1. 의존성
 
