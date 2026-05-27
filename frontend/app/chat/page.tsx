@@ -80,6 +80,9 @@ export default function ChatPage() {
   const [error, setError] = useState<string | null>(null);
   const [taskSummary, setTaskSummary] = useState<TaskSummary[]>([]);
   const listEndRef = useRef<HTMLDivElement | null>(null);
+  // Sprint 17: polling으로 새 assistant 메시지 도착 시 chrome notification 발사
+  const lastMessageIdRef = useRef<number>(0);
+  const notifyPermissionRef = useRef<string>("default");
 
   const refreshTaskSummary = useCallback(async (uid: string) => {
     try {
@@ -145,6 +148,66 @@ export default function ChatPage() {
       refreshTaskSummary(userId);
     }
   }, [userId, ensureSession, refreshTaskSummary]);
+
+  // Sprint 17: chat 페이지 진입 시 Notification 권한 한 번 요청
+  useEffect(() => {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    notifyPermissionRef.current = Notification.permission;
+    if (Notification.permission === "default") {
+      Notification.requestPermission().then((p) => {
+        notifyPermissionRef.current = p;
+      });
+    }
+  }, []);
+
+  // Sprint 17: 15초마다 polling — 새 assistant 메시지가 있으면 messages 갱신 +
+  // 페이지가 포커스 없을 때 chrome notification 발사.
+  useEffect(() => {
+    if (!sessionId) return;
+    const interval = window.setInterval(async () => {
+      const fresh = await fetchMessages(sessionId);
+      if (fresh.length === 0) return;
+      const newest = fresh[fresh.length - 1];
+      const prevLastId = lastMessageIdRef.current;
+      if (newest.id > prevLastId) {
+        lastMessageIdRef.current = newest.id;
+        setMessages(fresh);
+        if (userId) refreshTaskSummary(userId);
+        // chrome notification (페이지 visible이 아닐 때만)
+        if (
+          prevLastId !== 0 &&
+          newest.role === "assistant" &&
+          typeof document !== "undefined" &&
+          document.visibilityState !== "visible" &&
+          typeof Notification !== "undefined" &&
+          Notification.permission === "granted"
+        ) {
+          try {
+            const n = new Notification("내일의 너", {
+              body: parseAssistantContent(newest.content).body
+                || newest.content.split("\n").slice(0, 3).join(" "),
+              icon: "/icon.svg",
+              tag: `chat-${sessionId}`,
+            });
+            n.onclick = () => {
+              window.focus();
+              n.close();
+            };
+          } catch {
+            // graceful
+          }
+        }
+      }
+    }, 15_000);
+    return () => window.clearInterval(interval);
+  }, [sessionId, fetchMessages, userId, refreshTaskSummary]);
+
+  // 메시지 초기 로드 시 마지막 id 동기화
+  useEffect(() => {
+    if (messages.length > 0) {
+      lastMessageIdRef.current = messages[messages.length - 1].id;
+    }
+  }, [messages.length]);
 
   useEffect(() => {
     listEndRef.current?.scrollIntoView({ behavior: "smooth" });

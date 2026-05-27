@@ -160,6 +160,23 @@ def delete_task(
     conn.commit()
 
 
+@router.post("/_admin/trigger-followup", status_code=200)
+def admin_trigger_followup(
+    conn: sqlite3.Connection = Depends(get_db),
+    token_user_id: str = Depends(resolve_user_from_token),
+) -> dict:
+    """Sprint 17 시연용 — 토큰 소유자 본인의 task만 즉시 follow-up dispatch.
+
+    cooldown은 그대로 적용. 데모할 때 폴링을 기다리지 않게 한다.
+    """
+    from pipeline.followup import dispatch_due_followups
+
+    sent = dispatch_due_followups(conn)
+    # 본인 user의 결과만 필터링
+    mine = [s for s in sent if s.get("user_id") == token_user_id]
+    return {"sent_count": len(mine), "items": mine}
+
+
 @router.get("/{task_id}/snapshots", response_model=FolderSnapshotListResponse)
 def list_snapshots(
     task_id: int,
