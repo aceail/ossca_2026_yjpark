@@ -73,6 +73,16 @@ function MiniBar({ value, max }: { value: number; max: number }) {
   );
 }
 
+// Wave 7: VAPID base64url string → Uint8Array (pushManager.subscribe 요구 형식).
+function urlBase64ToUint8Array(base64: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64.length % 4)) % 4);
+  const b64 = (base64 + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(b64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
 function detectSelfBlameRising(weeks: SafetyWeek[]): boolean {
   if (weeks.length < 4) return false;
   const last4 = weeks.slice(-4).map((w) => w.self_blame_word_count);
@@ -97,6 +107,12 @@ export default function SettingsPage() {
 
   const [consents, setConsents] = useState<ConsentItem[]>([]);
   const [togglingTool, setTogglingTool] = useState<number | null>(null);
+
+  // Wave 7: Push 구독 상태
+  const [vapidKey, setVapidKey] = useState<string | null>(null);
+  const [pushAvailable, setPushAvailable] = useState(false);
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
 
   const [toasts, setToasts] = useState<Toast[]>([]);
 
@@ -169,6 +185,109 @@ export default function SettingsPage() {
       fetchConsents(userId);
     }
   }, [userId, fetchProfile, fetchSafetyTrend, fetchConsents]);
+
+  // Wave 7: VAPID 키 조회 + 현재 구독 상태 확인
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/push/vapid-public-key`);
+        if (!res.ok) return;
+        const d = await res.json();
+        if (cancelled) return;
+        setVapidKey(d.vapid_public_key ?? null);
+        setPushAvailable(Boolean(d.enabled));
+      } catch {
+        // ignore
+      }
+      if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          const sub = await reg.pushManager.getSubscription();
+          if (!cancelled) setPushSubscribed(!!sub);
+        } catch {
+          // ignore
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const subscribePush = async () => {
+    if (!vapidKey || !userId) return;
+    setPushBusy(true);
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") {
+        showToast("알림 권한이 거부되었어요");
+        return;
+      }
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey) as BufferSource,
+      });
+      const json = sub.toJSON() as {
+        endpoint?: string;
+        keys?: { p256dh?: string; auth?: string };
+      };
+      const res = await fetch(`${API_BASE}/api/push/subscriptions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({
+          user_id: userId,
+          endpoint: json.endpoint,
+          p256dh: json.keys?.p256dh,
+          auth: json.keys?.auth,
+        }),
+      });
+      if (!res.ok) throw new Error(`구독 등록 실패 (${res.status})`);
+      setPushSubscribed(true);
+      showToast("✓ 마감 알림이 켜졌어요");
+    } catch (e) {
+      showToast((e as Error).message ?? "알림 등록 실패");
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  const unsubscribePush = async () => {
+    if (!userId) return;
+    setPushBusy(true);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      const endpoint = sub?.endpoint ?? null;
+      if (sub) await sub.unsubscribe();
+      // DB에서 해당 endpoint 행 찾아 삭제
+      if (endpoint) {
+        const listRes = await fetch(
+          `${API_BASE}/api/push/users/${userId}/subscriptions`,
+          { headers: { ...authHeaders() } },
+        );
+        if (listRes.ok) {
+          const lst = await listRes.json();
+          const match = (lst.subscriptions ?? []).find(
+            (s: { endpoint: string; id: number }) => s.endpoint === endpoint,
+          );
+          if (match) {
+            await fetch(`${API_BASE}/api/push/subscriptions/${match.id}`, {
+              method: "DELETE",
+              headers: { ...authHeaders() },
+            });
+          }
+        }
+      }
+      setPushSubscribed(false);
+      showToast("알림을 껐어요");
+    } catch (e) {
+      showToast((e as Error).message ?? "알림 해지 실패");
+    } finally {
+      setPushBusy(false);
+    }
+  };
 
   const toggleConsent = async (item: ConsentItem) => {
     if (!userId) return;
@@ -459,6 +578,56 @@ export default function SettingsPage() {
               })}
             </div>
           )}
+        </section>
+
+        {/* 섹션 2.7: 마감 알림 (Wave 7) */}
+        <section>
+          <h2 className="text-[14px] font-semibold mb-1" style={{ fontFamily: "var(--font-feeling)" }}>
+            마감 알림
+          </h2>
+          <p className="text-[12px] mb-3" style={{ color: "var(--color-text-secondary)" }}>
+            마감이 가까운 작업을 폰 잠금 화면으로 알려요. (PWA 설치 후 가장 잘 동작합니다.)
+          </p>
+          <div
+            className="flex items-center justify-between px-4 py-3 rounded-xl"
+            style={{
+              backgroundColor: "var(--color-bg-card)",
+              border: "1px solid var(--color-border-subtle)",
+            }}
+          >
+            <div className="min-w-0">
+              {!pushAvailable ? (
+                <>
+                  <p className="text-[13px] font-medium">서버에 VAPID 키가 없어요</p>
+                  <p className="text-[11px]" style={{ color: "var(--color-text-secondary)" }}>
+                    <code>python scripts/gen_vapid.py</code> 실행 후 환경변수 설정이 필요해요
+                  </p>
+                </>
+              ) : pushSubscribed ? (
+                <>
+                  <p className="text-[13px] font-medium">알림 켜짐</p>
+                  <p className="text-[11px]" style={{ color: "var(--color-text-secondary)" }}>
+                    마감 임박 시 잠금 화면에 알림이 떠요
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-[13px] font-medium">알림 꺼짐</p>
+                  <p className="text-[11px]" style={{ color: "var(--color-text-secondary)" }}>
+                    토글하면 브라우저 권한 요청 후 활성화돼요
+                  </p>
+                </>
+              )}
+            </div>
+            <Button
+              variant={pushSubscribed ? "ghost" : "primary"}
+              size="sm"
+              onClick={pushSubscribed ? unsubscribePush : subscribePush}
+              disabled={!pushAvailable || pushBusy}
+            >
+              {pushBusy ? "..." : pushSubscribed ? "끄기" : "켜기"}
+            </Button>
+          </div>
         </section>
 
         {/* 섹션 3: Safety 트렌드 */}
