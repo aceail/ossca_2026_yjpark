@@ -21,7 +21,7 @@ from persona import seed_builtin_prompts
 from pipeline.folder_watch import scan_open_tasks
 from pipeline.followup import dispatch_due_followups
 from backend.deps import DB_PATH
-from backend.api import users, personas, onboarding, sessions, regret, safety, tone_feedback, consent, chat, tasks
+from backend.api import users, personas, onboarding, sessions, regret, safety, tone_feedback, consent, chat, tasks, calendar as calendar_api
 
 
 async def _folder_watch_loop(interval_seconds: int) -> None:
@@ -116,6 +116,7 @@ app.include_router(tone_feedback.router)
 app.include_router(consent.router)
 app.include_router(chat.router)
 app.include_router(tasks.router)
+app.include_router(calendar_api.router)
 
 
 @app.get("/health")
