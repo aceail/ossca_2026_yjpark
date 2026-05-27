@@ -20,7 +20,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from db import open_db, migrate, get_persona  # noqa: E402
 from persona import seed_builtin_prompts, FORBIDDEN_GROUPS  # noqa: E402
 from probe import ProbeEngine, select_active_prompt  # noqa: E402
-from regret import compute_signal_level  # noqa: E402
+from regret import build_ratio_hint, compute_signal_level, recommend_card_type  # noqa: E402
 
 # ────────────────────────────────────────────────────────────────────
 # Safety keyword detection (§6.5 F)
@@ -295,6 +295,13 @@ class SessionOrchestrator:
         # 3. elevated 신호 → 시스템 프롬프트 앞에 안전 후크 prefix
         if signal == "elevated":
             system_prompt = f"{ELEVATED_TONE_PREFIX}\n\n{system_prompt or ''}"
+
+        # P0-11: 두 얼굴 비율 hint — high는 위에서 soft_stop 강제로 빠져나갔으므로
+        # 여기 도달하는 normal/elevated 모두 hint 적용. elevated+recovery 권장은
+        # 자기비난 누적 상태에 더 적절한 회복형 카드를 LLM에게 유도한다.
+        ratio_hint = build_ratio_hint(recommend_card_type(self.conn, user_id))
+        if ratio_hint:
+            system_prompt = f"{system_prompt or ''}\n\n{ratio_hint}"
 
         # 사용자 메시지 구성
         user_msg = avoidance_input

@@ -76,11 +76,15 @@ v0.2를 "출시"라 부른 건 잘못된 표현 — 현재는 **v0.2 prototype +
 - [x] P0-24 Moral Licensing — 24h 사용 세션 ≥ 5건이면 `moral_licensing_nudge` 응답 필드 + 카드 상단 부드러운 자기참조 배너
 - [x] SafetyTrend API `signal_level` 필드 추가 (frontend 타입과 동기)
 
+### v0.3 sprint 2 (closed 2026-05-27)
+**Two-face balance scheduler**:
+- [x] P0-11 `regret/ratio.py` `recommend_card_type` + `build_ratio_hint` → 최근 5 카드 중 한쪽 ≥0.7이면 반대 유형 권장 hint를 `system_prompt`에 주입. soft_stop/paradox는 분모에서 제외.
+- [x] 설계 결정: ratio hint와 `elevated` 신호는 함께 적용 (high만 soft_stop 강제로 차단). `failure_imagery_ratio`가 ratio skew와 동치이므로 elevated와 ratio hint를 분리하면 hint가 영영 적용되지 않는다.
+
 ### v0.3 본격 (다음 라운드)
 **Complex**:
 - P0-8 API 인증 (간단 디바이스 토큰 + Authorization 헤더)
 - P0-10 평가 baseline 재정의 (3중 진실원 통합, repair loop 추가)
-- P0-11 두 얼굴 비율 스케줄러 — regret/recovery 자동 ratio 결정
 - P0-12 PromptVersion → 실 사용
 - P0-14 Fernet key OS keychain 또는 PBKDF2
 - P0-15 agent tool 활성화 사용자 명시 동의 게이트

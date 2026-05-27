@@ -7,6 +7,7 @@ from .slow_harm import (
     compute_signal_level,
     week_start_iso,
 )
+from .ratio import build_ratio_hint, recommend_card_type
 from .accuracy import record_card_accuracy, record_return_intent
 
 __all__ = [
@@ -19,6 +20,8 @@ __all__ = [
     "build_weekly_snapshot",
     "compute_signal_level",
     "week_start_iso",
+    "recommend_card_type",
+    "build_ratio_hint",
     "record_card_accuracy",
     "record_return_intent",
 ]
