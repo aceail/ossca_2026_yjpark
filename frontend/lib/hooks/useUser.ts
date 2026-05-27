@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { setToken } from "../auth";
+import { clearToken, getToken, setToken } from "../auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8001";
 
@@ -20,6 +20,7 @@ async function createUser(): Promise<User> {
   const response = await fetch(`${API_BASE}/api/users`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),  // CreateUserRequest는 빈 객체 — body 명시 필수
   });
 
   if (!response.ok) {
@@ -36,11 +37,18 @@ export function useUser(): UseUserResult {
 
   useEffect(() => {
     const stored = localStorage.getItem("user_id");
+    const storedToken = getToken();
 
-    if (stored) {
+    // P0-8 마이그레이션: token 없는 옛 user_id는 폐기하고 새로 발급
+    if (stored && storedToken) {
       setUserId(stored);
       setLoading(false);
       return;
+    }
+
+    if (stored && !storedToken) {
+      localStorage.removeItem("user_id");
+      clearToken();
     }
 
     createUser()
@@ -50,7 +58,6 @@ export function useUser(): UseUserResult {
         setUserId(user_id);
       })
       .catch(() => {
-        // 백엔드 미가용 시 graceful fallback: 임시 로컬 ID 사용
         const fallbackId = `local_${Date.now()}`;
         localStorage.setItem("user_id", fallbackId);
         setUserId(fallbackId);
