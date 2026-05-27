@@ -24,6 +24,16 @@ from typing import Optional
 OLLAMA_CHAT_URL = "http://127.0.0.1:11434/api/chat"
 OLLAMA_MODEL = "exaone3.5:7.8b"
 
+def _today_kst_str() -> str:
+    """LLM이 연도·월을 추측하지 않도록 매 호출 system prompt에 오늘 날짜를 박는다.
+    LLM 학습 cutoff(예: 2023)에 박혀 "내일"·"이번주" 같은 표현을 잘못 해석하는
+    것을 막는다. KST 기준.
+    """
+    from datetime import timedelta
+    now_kst = datetime.now(timezone.utc) + timedelta(hours=9)
+    return now_kst.strftime("%Y-%m-%d")
+
+
 ACTION_SYSTEM_SUFFIX = """
 
 [중요: 사용자는 UI 폼을 누르지 않습니다. 모든 작업 조작이 채팅 한 입력으로 일어나야 합니다]
@@ -79,8 +89,14 @@ def _persona_system_prompt(conn: sqlite3.Connection, persona_id: Optional[int]) 
                 voice = (row["voice_style"] or "").strip()
                 name = row["name"] or "내일의 나"
                 base = f"당신은 '{name}'입니다. 톤: {voice}. 한국어로 짧고 인간친화적으로 응답."
+    # Sprint 16: 날짜 cutoff 보정 — 매 호출 prefix에 오늘 날짜를 박는다
+    date_prefix = (
+        f"\n\n[시스템 정보]\n오늘 날짜: {_today_kst_str()} (KST). "
+        "사용자가 '6월 19일'처럼 말하면 오늘 날짜 기준 다음 6월 19일 (이미 지났으면 "
+        "내년)로 해석하세요. 절대 학습 데이터의 옛 연도(2023 등)를 쓰지 마세요.\n"
+    )
     # Wave 1: action 추출 안내 suffix
-    return base + ACTION_SYSTEM_SUFFIX
+    return base + date_prefix + ACTION_SYSTEM_SUFFIX
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -113,16 +129,56 @@ def _try_parse_action_response(raw: str) -> Optional[dict]:
     return {"speak": str(parsed["speak"]), "actions": actions}
 
 
+def _roll_forward_if_past(iso_date: str) -> str:
+    """LLM이 학습 cutoff 연도(2023 등)로 잘못 답한 경우 — 이미 지났으면 미래로
+    굴려준다. 같은 월·일을 유지하고 연도만 조정.
+    """
+    from datetime import timedelta
+    today_kst = (datetime.now(timezone.utc) + timedelta(hours=9)).date()
+    try:
+        y, m, d = (int(x) for x in iso_date.split("-"))
+    except (ValueError, TypeError):
+        return iso_date
+    from datetime import date as _date
+    try:
+        candidate = _date(y, m, d)
+    except ValueError:
+        return iso_date
+    # 1년 이상 과거면 → 같은 월·일의 미래 연도로 (오늘 이후 가장 가까운)
+    if candidate < today_kst - timedelta(days=30):
+        future_year = today_kst.year
+        try:
+            shifted = _date(future_year, m, d)
+        except ValueError:
+            return iso_date
+        if shifted < today_kst:
+            try:
+                shifted = _date(future_year + 1, m, d)
+            except ValueError:
+                return iso_date
+        return shifted.isoformat()
+    return iso_date
+
+
 def _parse_deadline_to_iso(value: Optional[str]) -> Optional[str]:
-    """LLM이 준 'YYYY-MM-DD' 또는 ISO 8601을 보존. 형식 오류면 None."""
+    """LLM이 준 'YYYY-MM-DD' 또는 ISO 8601을 보존. 형식 오류면 None.
+    Sprint 16: 학습 cutoff로 과거 연도 박힌 경우 자동 roll-forward.
+    """
     if not value:
         return None
     v = str(value).strip()
     if not v:
         return None
-    # YYYY-MM-DD만 오면 23:59 KST(=14:59 UTC) 가정 — 마감 통상 의도
+    # YYYY-MM-DD만 오면 roll-forward 검증 + 23:59 KST(=14:59 UTC) 가정
     if re.fullmatch(r"\d{4}-\d{2}-\d{2}", v):
+        v = _roll_forward_if_past(v)
         return f"{v}T23:59:00+09:00"
+    # 풀 ISO도 날짜 부분만 빼서 roll-forward 검증
+    date_part = v.split("T")[0]
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_part):
+        new_date = _roll_forward_if_past(date_part)
+        if new_date != date_part:
+            return v.replace(date_part, new_date, 1)
     return v
 
 
