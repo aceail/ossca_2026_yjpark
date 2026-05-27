@@ -173,8 +173,10 @@ export default function SettingsPage() {
         headers: { ...authHeaders() },
       });
       if (!res.ok) return;
-      const data: SafetyWeek[] = await res.json();
-      setSafetyTrend(data);
+      const data = await res.json();
+      // backend는 {user_id, weeks, signal_level} 객체 형태로 반환
+      const weeks: SafetyWeek[] = Array.isArray(data) ? data : (data?.weeks ?? []);
+      setSafetyTrend(weeks);
     } catch {
       // silent
     } finally {

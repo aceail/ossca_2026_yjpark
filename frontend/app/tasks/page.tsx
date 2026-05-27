@@ -91,15 +91,27 @@ export default function TasksPage() {
     await fetchTasks(userId);
   };
 
-  const setFolderPath = async (id: number, current: string | null | undefined) => {
+  const [folderEditId, setFolderEditId] = useState<number | null>(null);
+  const [folderDraft, setFolderDraft] = useState<string>("");
+
+  const beginEditFolder = (id: number, current: string | null | undefined) => {
+    setFolderEditId(id);
+    setFolderDraft(current ?? "");
+  };
+
+  const cancelEditFolder = () => {
+    setFolderEditId(null);
+    setFolderDraft("");
+  };
+
+  const submitFolder = async (id: number) => {
     if (!userId) return;
-    const next = prompt("폴더 경로 (절대 경로)", current ?? "");
-    if (next === null) return;
     await fetch(`${API_BASE}/api/tasks/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", ...authHeaders() },
-      body: JSON.stringify({ folder_path: next.trim() || null }),
+      body: JSON.stringify({ folder_path: folderDraft.trim() || null }),
     });
+    cancelEditFolder();
     await fetchTasks(userId);
   };
 
@@ -181,16 +193,53 @@ export default function TasksPage() {
                         </span>
                       )}
                     </p>
-                    <p className="text-[11px] mt-1.5" style={{ color: "var(--color-text-secondary)" }}>
-                      폴더:{" "}
-                      <button
-                        type="button"
-                        onClick={() => setFolderPath(t.id, t.folder_path)}
-                        className="underline-offset-2 hover:underline"
-                      >
-                        {t.folder_path ?? "등록하기"}
-                      </button>
-                    </p>
+                    {folderEditId === t.id ? (
+                      <div className="flex gap-1.5 mt-1.5">
+                        <input
+                          type="text"
+                          value={folderDraft}
+                          onChange={(e) => setFolderDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") submitFolder(t.id);
+                            if (e.key === "Escape") cancelEditFolder();
+                          }}
+                          placeholder="/Users/yj/Desktop/work"
+                          autoFocus
+                          className="flex-1 px-2 py-1 text-[11px] rounded font-mono"
+                          style={{
+                            backgroundColor: "var(--color-bg-base)",
+                            border: "1px solid var(--color-border-subtle)",
+                            color: "var(--color-text-primary)",
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => submitFolder(t.id)}
+                          className="text-[11px] px-2 underline-offset-2 hover:underline"
+                        >
+                          저장
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelEditFolder}
+                          className="text-[11px] px-1"
+                          style={{ color: "var(--color-text-secondary)" }}
+                        >
+                          취소
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] mt-1.5" style={{ color: "var(--color-text-secondary)" }}>
+                        폴더:{" "}
+                        <button
+                          type="button"
+                          onClick={() => beginEditFolder(t.id, t.folder_path)}
+                          className="underline-offset-2 hover:underline"
+                        >
+                          {t.folder_path ?? "등록하기"}
+                        </button>
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-col gap-1.5 flex-shrink-0">
                     {!isDone && (
