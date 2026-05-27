@@ -238,3 +238,53 @@ class ConsentActionResponse(BaseModel):
     user_id: str
     tool_id: int
     active: bool
+
+
+# ── Tasks (Sprint 12 / Wave 1) ────────────────────────────────────────
+
+class TaskCreateRequest(BaseModel):
+    user_id: str
+    title: str
+    deadline_at: Optional[str] = None      # ISO 8601, e.g. "2026-05-31T00:00:00+09:00"
+    folder_path: Optional[str] = None
+    persona_id: Optional[int] = None
+
+
+class TaskUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    deadline_at: Optional[str] = None
+    folder_path: Optional[str] = None
+    status: Optional[str] = None           # open | done | abandoned
+    persona_id: Optional[int] = None
+
+
+class TaskResponse(BaseModel):
+    id: int
+    user_id: str
+    persona_id: Optional[int] = None
+    title: str
+    deadline_at: Optional[str] = None
+    folder_path: Optional[str] = None
+    status: str
+    last_followup_at: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+
+class TaskListResponse(BaseModel):
+    user_id: str
+    tasks: list[TaskResponse]
+
+
+class FolderSnapshotItem(BaseModel):
+    id: int
+    task_id: int
+    taken_at: str
+    file_count: int
+    total_bytes: int
+    newest_mtime: Optional[str] = None
+
+
+class FolderSnapshotListResponse(BaseModel):
+    task_id: int
+    snapshots: list[FolderSnapshotItem]

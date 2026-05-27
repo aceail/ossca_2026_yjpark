@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from db import open_db, migrate
 from persona import seed_builtin_prompts
 from backend.deps import DB_PATH
-from backend.api import users, personas, onboarding, sessions, regret, safety, tone_feedback, consent, chat
+from backend.api import users, personas, onboarding, sessions, regret, safety, tone_feedback, consent, chat, tasks
 
 
 @asynccontextmanager
@@ -56,6 +56,7 @@ app.include_router(safety.router)
 app.include_router(tone_feedback.router)
 app.include_router(consent.router)
 app.include_router(chat.router)
+app.include_router(tasks.router)
 
 
 @app.get("/health")
