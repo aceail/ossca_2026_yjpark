@@ -159,6 +159,39 @@ def _exec_task_progress(conn: sqlite3.Connection, user_id: str, **kw) -> dict:
             "progressed": (len(snaps) >= 2 and snaps[0]["file_count"] > snaps[1]["file_count"])}
 
 
+def _exec_search_memory(conn: sqlite3.Connection, user_id: str, **kw) -> dict:
+    """Sprint 19: FTS5로 사용자 과거 chat 메시지 검색.
+
+    LLM이 "지난번에 발표자료에 대해 뭐라고 했지?" 같은 질문 시 자율 호출.
+    공백으로 분리된 토큰 모두 매칭. user 메시지가 가장 의미 있으므로 role 가중치
+    적용 (현 PoC: role 필터 옵션만).
+    """
+    query = str(kw.get("query", "")).strip()
+    if not query:
+        return {"ok": False, "error": "query required"}
+    limit = min(int(kw.get("limit", 5) or 5), 20)
+    role_filter = kw.get("role")  # 'user' | 'assistant' | None
+    # FTS5 syntax: quote에 safe하게 ', and ' → 사용자 자유 토큰
+    safe_query = " ".join(part for part in query.split() if part)
+    sql = (
+        "SELECT m.id, m.role, m.content, m.created_at, m.chat_session_id "
+        "FROM ChatMessageFts f JOIN ChatMessage m ON m.id = f.rowid "
+        "JOIN ChatSession s ON s.id = m.chat_session_id "
+        "WHERE f.content MATCH ? AND s.user_id = ?"
+    )
+    args: list = [safe_query, user_id]
+    if role_filter in ("user", "assistant", "system"):
+        sql += " AND m.role = ?"
+        args.append(role_filter)
+    sql += " ORDER BY m.id DESC LIMIT ?"
+    args.append(limit)
+    try:
+        rows = conn.execute(sql, args).fetchall()
+    except sqlite3.OperationalError as exc:
+        return {"ok": False, "error": f"FTS query 실패: {exc}"}
+    return {"ok": True, "query": query, "hits": [dict(r) for r in rows]}
+
+
 def _exec_recent_followups(conn: sqlite3.Connection, user_id: str, **kw) -> dict:
     limit = min(int(kw.get("limit", 5) or 5), 20)
     rows = conn.execute(
@@ -246,6 +279,24 @@ REGISTRY: dict[str, Tool] = {
             "properties": {"limit": {"type": "integer", "minimum": 1, "maximum": 20}},
         },
         executor=_exec_recent_followups,
+    ),
+    "search_memory": Tool(
+        name="search_memory",
+        description=(
+            "사용자의 과거 대화(ChatMessage)를 FTS5 전문 검색. "
+            "'지난번에 ~에 대해 뭐라고 했지?', '회의 노트 어디 있더라' 등에 호출. "
+            "query=검색어, role=user/assistant 필터, limit=최대 결과 수(기본 5)."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "role": {"type": "string", "enum": ["user", "assistant", "system"]},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 20},
+            },
+            "required": ["query"],
+        },
+        executor=_exec_search_memory,
     ),
 }
 
