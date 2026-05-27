@@ -77,6 +77,20 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _persona_system_prompt_with_memory(
+    conn: sqlite3.Connection,
+    persona_id: Optional[int],
+    user_id: Optional[str],
+) -> str:
+    """Sprint 20: 페르소나 prompt + 사용자 top memory + 날짜·action suffix."""
+    base = _persona_system_prompt(conn, persona_id)
+    if user_id:
+        from pipeline.memory import format_for_prompt, top_memories
+        memos = top_memories(conn, user_id, limit=5)
+        base = base + format_for_prompt(memos)
+    return base
+
+
 def _persona_system_prompt(conn: sqlite3.Connection, persona_id: Optional[int]) -> str:
     if not persona_id:
         base = "당신은 사용자의 미래 자아입니다. 1인칭으로 짧게 대답하세요."
@@ -455,8 +469,10 @@ def post_user_message(
     # 1. user 메시지 저장
     _record_message(conn, session_id, "user", content)
 
-    # 2. 누적 메시지 + system prompt
-    system_prompt = _persona_system_prompt(conn, sess["persona_id"])
+    # 2. 누적 메시지 + system prompt (+ Sprint 20: top memory)
+    system_prompt = _persona_system_prompt_with_memory(
+        conn, sess["persona_id"], sess["user_id"],
+    )
     history = _load_history(conn, session_id)
     messages: list[dict] = [{"role": "system", "content": system_prompt}] + history
 

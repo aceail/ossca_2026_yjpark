@@ -159,6 +159,36 @@ def _exec_task_progress(conn: sqlite3.Connection, user_id: str, **kw) -> dict:
             "progressed": (len(snaps) >= 2 and snaps[0]["file_count"] > snaps[1]["file_count"])}
 
 
+def _exec_remember(conn: sqlite3.Connection, user_id: str, **kw) -> dict:
+    """Sprint 20: 사용자에 대해 새 사실·선호·반복 패턴을 UserMemory에 저장."""
+    from pipeline.memory import upsert_memory
+    key = str(kw.get("key", "")).strip()
+    value = str(kw.get("value", "")).strip()
+    if not key or not value:
+        return {"ok": False, "error": "key and value required"}
+    mid = upsert_memory(conn, user_id=user_id, key=key, value=value,
+                       source=kw.get("source", "assistant"))
+    return {"ok": True, "memory_id": mid, "key": key}
+
+
+def _exec_recall(conn: sqlite3.Connection, user_id: str, **kw) -> dict:
+    from pipeline.memory import recall as _recall
+    q = str(kw.get("query", "")).strip()
+    if not q:
+        return {"ok": False, "error": "query required"}
+    hits = _recall(conn, user_id, query=q, limit=int(kw.get("limit", 5) or 5))
+    return {"ok": True, "hits": hits}
+
+
+def _exec_forget(conn: sqlite3.Connection, user_id: str, **kw) -> dict:
+    from pipeline.memory import forget as _forget
+    key = str(kw.get("key", "")).strip()
+    if not key:
+        return {"ok": False, "error": "key required"}
+    removed = _forget(conn, user_id, key=key)
+    return {"ok": True, "removed": removed}
+
+
 def _exec_search_memory(conn: sqlite3.Connection, user_id: str, **kw) -> dict:
     """Sprint 19: FTS5로 사용자 과거 chat 메시지 검색.
 
@@ -284,8 +314,7 @@ REGISTRY: dict[str, Tool] = {
         name="search_memory",
         description=(
             "사용자의 과거 대화(ChatMessage)를 FTS5 전문 검색. "
-            "'지난번에 ~에 대해 뭐라고 했지?', '회의 노트 어디 있더라' 등에 호출. "
-            "query=검색어, role=user/assistant 필터, limit=최대 결과 수(기본 5)."
+            "'지난번에 ~에 대해 뭐라고 했지?', '회의 노트 어디 있더라' 등에 호출."
         ),
         parameters={
             "type": "object",
@@ -297,6 +326,49 @@ REGISTRY: dict[str, Tool] = {
             "required": ["query"],
         },
         executor=_exec_search_memory,
+    ),
+    "remember": Tool(
+        name="remember",
+        description=(
+            "사용자에 대해 새로 알게 된 사실·선호·반복 패턴을 장기 메모리에 저장. "
+            "예: key='멘토 미팅 요일', value='매주 금요일 오후'. "
+            "다음 대화부터 자동으로 시스템 컨텍스트에 inject됨."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "key": {"type": "string", "description": "기억의 식별자, 짧은 라벨"},
+                "value": {"type": "string", "description": "구체 내용"},
+            },
+            "required": ["key", "value"],
+        },
+        executor=_exec_remember,
+    ),
+    "recall": Tool(
+        name="recall",
+        description=(
+            "UserMemory에 저장한 것을 키워드로 검색. 사용자가 '내가 뭐 좋아한다고 했지?' "
+            "같이 메타-기억 질문 시 호출."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 20},
+            },
+            "required": ["query"],
+        },
+        executor=_exec_recall,
+    ),
+    "forget": Tool(
+        name="forget",
+        description="UserMemory에서 key 1개 삭제. 사용자가 '그거 기억하지 마' 요청 시.",
+        parameters={
+            "type": "object",
+            "properties": {"key": {"type": "string"}},
+            "required": ["key"],
+        },
+        executor=_exec_forget,
     ),
 }
 
