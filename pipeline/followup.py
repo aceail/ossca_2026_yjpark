@@ -22,6 +22,13 @@ from pipeline.chat import _record_message, create_chat_session  # noqa: WPS437
 from pipeline.followup_tone import decide_followup
 from regret import compute_signal_level
 
+# Push 발송은 best-effort. import 단계 실패가 backend를 깨지 않게 graceful.
+try:
+    from backend.push import send_push_to_user
+except Exception:  # pragma: no cover
+    def send_push_to_user(*args, **kwargs):  # type: ignore
+        return 0
+
 
 def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
@@ -168,12 +175,22 @@ def dispatch_due_followups(
         )
         conn.commit()
 
+        # Wave 6: 잠금 화면 push (라이브러리·VAPID 키 없으면 no-op).
+        push_sent = send_push_to_user(
+            conn,
+            user_id=t["user_id"],
+            title="내일의 너",
+            body=decision.message,
+            url="/chat",
+        )
+
         sent.append({
             "task_id": t["id"],
             "user_id": t["user_id"],
             "session_id": session_id,
             "tone": decision.tone,
             "message": decision.message,
+            "push_sent": push_sent,
         })
 
     return sent
