@@ -1,7 +1,8 @@
 # 내일의 너 (Tomorrow's You)
 
-> 미루기 직전, 미래 자아가 1인칭 시점으로 말하는 시나리오를 LLM이 생성해 행동을 멈추게 하는 **개인화 윤리적 행동 변화 도구**.
-> OSSCA 2026 멘티 산출물 · Ollama 로컬 LLM · 17 테이블 SQLite · 5 페르소나 · 4 톤 모드 · Slow Harm 안전 시계열 · Agent 통합.
+> 미루기 직전, 미래 자아가 1인칭 시점으로 reality-check해 행동을 멈추게 하는 **로컬-우선 윤리적 행동 변화 PWA**.
+> 채팅에서 마감을 말하면 자동 캘린더 등록 → 폴더 감시 → 마감 거리·진척도·자기비난 신호에 따라 톤 자동 follow-up → 잠금 화면 알림.
+> OSSCA 2026 멘티 산출물 · Ollama 로컬 LLM · 모든 데이터 사용자 디스크.
 
 ```
 오늘도 미뤘다.
@@ -10,126 +11,168 @@
 
 ---
 
-## 핵심 차별점
+## 무엇이 다른가
 
-- **다중 페르소나 (Character.AI 패러다임)** — 5 default + Custom Builder. 각 페르소나는 자체 `perspective`(1st/2nd/3rd) + 톤(Quiet/Sharp/Witty/Savage) + 절대 한계선.
-- **팩트폭격 + 유쾌 톤** — 위로 X 비난 X. 시간·결과를 직시하되 1인칭 자기 풍자로 가벼움 유지.
-- **로컬 우선** — Ollama로 모든 LLM 호출이 디바이스 안. OAuth 토큰도 로컬 암호화. 클라우드 백엔드 없음.
-- **Slow Harm 안전 시계열** — 급성 위기뿐 아니라 저강도 만성 손상(자기 비난 누적·정체성 결함 표현·실패 이미지 디폴트화) 주별 추적.
-- **윤리 디자인** — "잔소리하는 부모의 디지털 투사체"가 되지 않도록 16개 메커니즘 (Self-Destruct 즉시 삭제·Soft-stop 감속·역설적 의도 감지·사회적 노출 자동 블러).
-- **TUI MVP + 웹 SPA prototype** — 카드 비주얼이 1급 자산.
+- **자기 보고 + 객관 신호 동시 reality-check** — "거의 다 했어"라고 말해도 폴더 mtime이 어제 그대로면 부드럽게 의심.
+- **다중 페르소나 (Character.AI 패러다임)** — 6 default (Quiet·Sharp·Witty·Savage 4 톤 + 1인칭/2인칭/3인칭 perspective) + Custom Builder. 의도 확인·Savage opt-in 가드.
+- **Slow Harm 안전 시계열** — 자기 비난 누적 측정 → follow-up 톤 자동 완화·차단.
+- **로컬 우선** — Ollama LLM + SQLite + 폴더 직접 접근. 클라우드 백엔드 없음.
+- **PWA + 잠금 화면 알림** — 폰 홈 화면 앱처럼. VAPID Web Push 옵션.
+- **외부 캘린더 양방향** — ICS feed로 Google Calendar / Apple Calendar 구독 가능.
+- **윤리 디자인** — 11+ 안전 메커니즘 (Slow Harm·Moral Licensing·Savage opt-in·Self-Destruct·token 인증·동의 게이트·idempotency).
 
-## Quickstart
+## 빠른 시작 (Local 모드)
 
-### A. TUI MVP (CLI 즉시 실행)
+### 1. 의존성
+
 ```bash
-# 1. Ollama 서버 + 모델 준비
+# Ollama (LLM)
 ollama serve &
 ollama pull exaone3.5:7.8b
 
-# 2. DB 마이그레이션
-python3 -c "from db import open_db, migrate; migrate(open_db('tomorrow_you.db'))"
-
-# 3. CLI MVP 실행
-python3 scripts/cli.py
-```
-
-### B. 웹 SPA (Next.js + FastAPI)
-```bash
-# 1. Backend 의존성 (1회)
+# Backend
 pip install --user fastapi uvicorn pydantic cryptography
+# (옵션) 잠금 화면 Push 알림
+pip install --user pywebpush
 
-# 2. Frontend 의존성 (1회)
+# Frontend (1회)
 cd frontend && npm install && cd ..
-
-# 3. 동시 실행 (백엔드 :8001 + 프론트엔드 :3000)
-bash scripts/dev.sh
-# 또는 따로:
-bash scripts/dev.sh backend
-bash scripts/dev.sh frontend
-
-# 4. 브라우저 → http://localhost:3000
-
-# 통합 smoke check
-bash scripts/integration_check.sh
 ```
 
-### C. 환경 변수
-- `cp .env.example .env`
-- `cp frontend/.env.example frontend/.env.local`
+### 2. 실행
 
-## 첫 사용 흐름
+```bash
+# 한 번에:
+bash scripts/dev.sh
 
-1. **Onboarding** — 카드형 5질문(3 필수 + 2 보너스). 60초 또는 120초 ESCape. 페르소나 선택 카드에서 5 default 중 1 또는 Custom Builder.
-2. **회피 입력** — "내일 발표인데 슬라이드 0장. 새벽 1시야."
-3. **Probe (선택)** — Phase 2이면 정보이득 최대 1개 질문 (skip 가능, 24h cooldown).
-4. **시나리오 카드 생성** — 페르소나별 화법으로 fact + feeling + 30초 micro_action.
-5. **결정** — [t]시작 / [c]계속 / [r]리포트 / [d]삭제 (Self-Destruct).
-6. **사후 회고** — 24h 후 RegretScore + 카드 정확도 + 다음 사용 의향.
+# 또는 따로:
+python -m uvicorn backend.main:app --port 8001          # backend
+cd frontend && npm run dev                              # frontend :3000
+```
 
-## 프로젝트 구조
+브라우저: **http://localhost:3000**
+
+### 3. (옵션) 잠금 화면 알림 활성화
+
+```bash
+# VAPID 키 1회 생성
+python scripts/gen_vapid.py
+# 출력된 환경변수 세 줄을 backend가 보는 셸에 export 또는 .env에 추가
+# NEXT_PUBLIC_VAPID_PUBLIC_KEY 한 줄은 frontend/.env.local에 추가
+```
+
+backend 재시작 후 `/settings → 마감 알림 → 켜기` 토글.
+
+## 사용 흐름
+
+1. **PWA 설치** — 폰 Chrome/Safari에서 사이트 접속 → "홈 화면에 추가" → 아이콘.
+2. **페르소나 선택** — `/personas` 에서 6 default 중 1 (Savage 톤은 opt-in 확인).
+3. **자연어로 마감 등록** — `/chat` 에서 "5월 31일까지 발표자료 만들어야해" → 자동 `Task` 등록 + 캘린더 카드 + `/tasks`/`/calendar` 페이지에서 확인.
+4. **폴더 등록** — `/tasks` 카드의 "폴더: 등록하기" → 절대 경로 입력 → backend가 30분 주기로 file_count/mtime 스냅샷.
+5. **외부 캘린더 구독** — `/calendar → 외부 캘린더에서 구독` → URL 복사 → Google/Apple에서 URL로 구독.
+6. **자동 follow-up** — 마감 D-3부터 chat에 push:
+   - 진척 있고 D-3 → 위트 (`오 시작했네 👀`)
+   - 진척 없고 D-1 → 직설 (`어제부터 폴더 그대로야`)
+   - 진척 없고 D-0 → 단호 (`'거의 다 했어' 같은 말은 안 통해`)
+   - Slow Harm `elevated` 누적 시 → Quiet 톤 강제
+7. **잠금 화면 알림** (Push 활성화 시) — 같은 메시지가 폰 잠금 화면에 표시 → 탭 시 `/chat` 진입.
+
+## 모바일에서 접근하기
+
+같은 폰 + 같은 머신은 LAN으로 즉시. 외부망은 옵션:
+
+| 옵션 | OSS 정도 | 한 줄 |
+|---|---|---|
+| **LAN** | 100% | `uvicorn --host 0.0.0.0`로 backend bind → 폰에서 `http://PC_IP:8001` |
+| **Tailscale** | 클라이언트 OSS, 컨트롤 SaaS | PC + 폰에 깔면 mesh VPN. 100명 무료. |
+| **headscale** + Tailscale 클라이언트 | 100% OSS | 컨트롤 플레인 셀프호스트. |
+| **Cloudflare Tunnel** | 클라이언트 OSS, CF 의존 | 도메인 필요. 무료. |
+| **frp** | 100% OSS | VPS 1대 필요. 100% 자기 인프라. |
+
+자세한 설정은 [`docs/MOBILE_ACCESS.md`](docs/MOBILE_ACCESS.md).
+
+## 두 모드: Local vs Cloud
+
+이 저장소는 **Local 모드**를 기본으로 동작. Cloud 모드는 provider 추상화(`core/providers/`)에 자리만 마련되어 있으며 desktop agent(`agent_desktop/`)와 Google OAuth는 후속 sprint.
+
+`NAEIL_MODE=local` (기본) · `NAEIL_MODE=cloud` 환경변수 한 줄로 분기. 같은 코드, provider 인스턴스만 다름.
+
+## 디렉토리 구조
 
 ```
 .
-├── db/                    # 17 테이블 SQLite + 마이그레이션 시스템 (G003)
-│   ├── schema.py
-│   └── migrations/
-│       ├── 001_initial.sql            # 17 테이블 + 5 페르소나 seed
-│       ├── 002_seed_probe_questions.sql
-│       ├── 003_pipeline_session_indexes.sql
-│       └── 004_seed_agent_tools.sql
-├── persona/               # 5 default + Builder 안전 audit (G011)
-├── probe/                 # HITL Phase 1/2/3 + 휴리스틱 (G004)
-├── pipeline/              # SessionOrchestrator (G006)
-├── ui/                    # TUI 카드 렌더링
-├── regret/                # RegretScore + Fingerprint + Slow Harm + 정확도 (G007)
-├── agent/                 # Calendar/Files/Search tool 통합 (G010)
-├── scripts/               # CLI + 평가 파이프라인 + 시뮬레이터
-├── web/                   # 웹 SPA prototype + 디자인 토큰 v1
-├── tests/                 # unittest (130+)
-└── .omc/ultragoal/        # v2.3 설계 문서 (17+ 산출물)
+├── db/                          # 14 마이그레이션 + SQLite helper
+├── core/providers/              # FolderProvider 추상화 (local·cloud)
+├── persona/                     # 6 default + Custom Builder audit
+├── probe/                       # HITL Phase routing
+├── pipeline/                    # SessionOrchestrator + chat + folder_watch + followup
+├── regret/                      # RegretScore + Slow Harm + ratio scheduler
+├── agent/                       # ToolRouter + consent + integrations
+├── eval/                        # LLM-as-judge framework (judge/repair/runner)
+├── ui/                          # TUI 카드 렌더링
+├── scripts/                     # CLI, VAPID 생성, dev.sh 등
+├── backend/                     # FastAPI app + 13 라우터
+│   ├── api/
+│   │   ├── users / personas / sessions / regret / safety / tone_feedback
+│   │   ├── onboarding / consent / chat / tasks
+│   │   ├── calendar (ICS feed 포함) / push_api
+│   ├── deps.py                  # require_token + resolve_user_from_token
+│   ├── idempotency.py           # POST 중복 방지
+│   └── push.py                  # VAPID Web Push helper
+├── frontend/                    # Next.js 16 + React 19 + Tailwind v4
+│   ├── app/
+│   │   ├── manifest.ts          # PWA manifest
+│   │   ├── chat/ tasks/ calendar/ settings/ personas/ onboarding/ scenario/
+│   ├── components/
+│   │   ├── BottomTabs.tsx       # 모바일 4-탭
+│   │   └── ServiceWorkerRegister.tsx
+│   ├── public/sw.js             # Push handler + offline 캐시
+│   └── lib/{auth, api, hooks}/
+├── tests/                       # unittest 340+
+└── .omc/                        # 설계 문서 + autopilot 산출물
+    ├── autopilot/spec.md
+    ├── plans/autopilot-impl.md
+    └── ultragoal/
+        ├── FINAL_GOAL.md
+        └── CRITIQUE_v0.2.md
 ```
 
-## OSSCA 기여 표면 (재사용 가능 라이브러리)
+## 안전·보안 (요약)
 
-1. HITL 질문 뱅크 + 휴리스틱 정보 이득 알고리즘
-2. Ollama 한국어 시나리오 카드 프롬프트 (v2 팩트폭격 + 유쾌)
-3. 후회 점수 데이터셋 스키마 + Slow Harm 시계열 패턴
-4. 카드 디자인 시스템 + 5 페르소나 시각 토큰
-5. 톤 모드 시스템 (Quiet/Sharp/Witty/Savage + Recovery)
-6. Agent Tool Library (Calendar/Files/Search + OAuth 로컬 암호화)
-7. 윤리적 페르소나 시스템 + 안전 audit 게이트
+| 메커니즘 | 위치 |
+|---|---|
+| device token Bearer 인증 (P0-8) | `backend/deps.py` |
+| Slow Harm 신호 게이트 (P0-9) | `pipeline/orchestrator.py` |
+| 두 얼굴 비율 스케줄러 (P0-11) | `regret/ratio.py` |
+| PromptVersion 추적 (P0-12) | `db/schema.py` |
+| Fernet PBKDF2 passphrase (P0-14) | `agent/integrations.py` |
+| Agent tool 동의 게이트 (P0-15) | `agent/consent.py` |
+| Idempotency keys (P0-16) | `backend/idempotency.py` |
+| Typography 위계 (P0-19) | `frontend/app/globals.css` |
+| Savage opt-in + Custom Builder 의도 (P0-21) | `frontend/app/personas/page.tsx` |
+| Moral Licensing 너지 (P0-24) | `pipeline/orchestrator.py` |
+| Follow-up tone matrix | `pipeline/followup_tone.py` |
 
-## 윤리 가이드라인
-
-MIT + **dual-use 제한**: 사용자 취약성을 설득 무기로 변환하는 파생 금지. 자세한 조건은 `LICENSE` 참조.
-
-비목표 (명시):
-- 클라우드 백엔드 · 회원가입 서버
-- 네이티브 모바일 (TUI + 웹 prototype까지만)
-- 자동 외부 액션 (read-only first)
-- 게이미피케이션 (streak·뱃지·confetti)
-- 수치심 기반 동기 의존
+자세한 보안 정책은 [`SECURITY.md`](SECURITY.md).
 
 ## 테스트
 
 ```bash
-python3 -m unittest discover tests -v
+NAEIL_DISABLE_WATCH=1 NAEIL_DISABLE_FOLLOWUP=1 python -m unittest discover tests
 ```
 
-130+ unittest (data model · persona · probe · pipeline · tui · agent · regret · eval harness · release artifacts).
+340+ unittest (data model · persona · probe · pipeline · chat · tasks · calendar/ICS · push subscription · folder watch · followup tone · token auth · consent · idempotency · slow harm · ratio · PromptVersion · Fernet key derivation · evaluation framework).
 
-## 설계 문서
+## 비목표
 
-`.omc/ultragoal/` 폴더:
-- `FINAL_GOAL.md` — 17 섹션 마스터 명세 (v2.3)
-- `UI_UX_DIRECTION_v1.md` — 788줄 디자인 가이드
-- `CCG_REVIEW_R2.md` — 블라인드스팟 리뷰 합성
-- `PERSONA_SYSTEM_v1.md` · `PIPELINE_v1.md` · `EVAL_HARNESS_DESIGN_v1.md` · `REGRET_FINGERPRINT_v1.md` · `AGENT_INTEGRATIONS_v1.md` · `DATA_MODEL_v1.md` · `ONBOARDING_FLOW_v1.md`
+- 클라우드 백엔드 / 회원가입 서버 (Local 모드 기본)
+- 자동 외부 액션 (read-only first, P0-15 동의 게이트 필수)
+- 게이미피케이션 (streak·뱃지·confetti)
+- 수치심 기반 동기
 
 ## 라이선스
 
-MIT + Ethical Use Restriction. `LICENSE`.
+MIT + **Ethical Use Restriction**. 사용자 취약성을 설득 무기로 변환하는 파생 금지. 자세한 조건은 [`LICENSE`](LICENSE).
 
 ## 만든 사람
 
