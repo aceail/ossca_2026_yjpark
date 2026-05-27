@@ -173,6 +173,25 @@ export function ScenarioCard({
           <hr style={{ borderColor: styles.border, opacity: 0.4 }} />
         )}
 
+        {/* P0-24: Moral Licensing 너지 — 24h 사용 빈도 ≥ 임계 시 부드러운 자기참조 */}
+        {card.moral_licensing_nudge && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="rounded-md px-3 py-2"
+            style={{
+              backgroundColor: "var(--color-action-bg)",
+              border: `1px dashed ${styles.border}`,
+              fontFamily: "var(--font-feeling)",
+              fontSize: "12px",
+              lineHeight: "1.55",
+              color: "var(--color-text-secondary)",
+            }}
+          >
+            {card.moral_licensing_nudge}
+          </div>
+        )}
+
         {/* soft_stop: 단일 메시지 + 선택지 */}
         {isSoftStop && (
           <>

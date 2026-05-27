@@ -43,6 +43,8 @@ export interface ScenarioCard {
     feeling?: string | null;
     micro_action?: string | null;
   };
+  signal_level?: "normal" | "elevated" | "high";  // P0-9 Slow Harm 누적
+  moral_licensing_nudge?: string | null;          // P0-24 24h 사용 빈도 너지
 }
 
 export interface AvoidanceSession {

@@ -70,10 +70,15 @@ v0.2를 "출시"라 부른 건 잘못된 표현 — 현재는 **v0.2 prototype +
 - [x] P0-7 Fake UNDO → 정직 처리 (UNDO 텍스트 제거 또는 실 복원)
 - [x] P0-13 PersonaInfo schema 완성
 
+### v0.3 sprint 1 (closed 2026-05-27)
+**Safety gates — generate-time enforcement**:
+- [x] P0-9 Slow Harm 시계열을 generate 직전 호출 → `compute_signal_level` 등급화 + high→soft_stop, elevated→`ELEVATED_TONE_PREFIX` 주입
+- [x] P0-24 Moral Licensing — 24h 사용 세션 ≥ 5건이면 `moral_licensing_nudge` 응답 필드 + 카드 상단 부드러운 자기참조 배너
+- [x] SafetyTrend API `signal_level` 필드 추가 (frontend 타입과 동기)
+
 ### v0.3 본격 (다음 라운드)
 **Complex**:
 - P0-8 API 인증 (간단 디바이스 토큰 + Authorization 헤더)
-- P0-9 Slow Harm 시계열을 generate 직전 호출 → 페르소나 자동 톤 완화
 - P0-10 평가 baseline 재정의 (3중 진실원 통합, repair loop 추가)
 - P0-11 두 얼굴 비율 스케줄러 — regret/recovery 자동 ratio 결정
 - P0-12 PromptVersion → 실 사용
@@ -82,7 +87,6 @@ v0.2를 "출시"라 부른 건 잘못된 표현 — 현재는 **v0.2 prototype +
 - P0-16 작업 큐 + idempotency
 - P0-19 Typography 위계 재검토 (Serif/Sans 역할 교환 또는 단일 fontfamily)
 - P0-21 Custom Builder UX 가드 — "왜 이 페르소나를 만드세요?" 의도 확인
-- P0-24 **Moral Licensing 대응 메커니즘** — 앱 자체 사용 빈도 모니터링 → 일정 횟수 초과 시 "이 도구가 또 다른 미루기 대상이 되고 있을 수 있어요" 부드러운 안내
 
 ## 5. OSSCA 멘토 제출 전 필수 게이트
 

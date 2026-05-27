@@ -186,6 +186,8 @@ def generate_scenario(
         },
         safety_message=card.safety_message,
         persona=persona_info,
+        signal_level=card.signal_level,
+        moral_licensing_nudge=card.moral_licensing_nudge,
     )
 
 

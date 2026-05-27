@@ -6,7 +6,7 @@ import sqlite3
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from regret import build_weekly_snapshot, week_start_iso
+from regret import build_weekly_snapshot, compute_signal_level, week_start_iso
 from backend.schemas import (
     SafetyTrendResponse,
     SafetySnapshotItem,
@@ -47,7 +47,8 @@ def get_safety_trend(
         )
         for r in rows
     ]
-    return SafetyTrendResponse(user_id=user_id, weeks=weeks)
+    signal = compute_signal_level(conn, user_id)
+    return SafetyTrendResponse(user_id=user_id, weeks=weeks, signal_level=signal)
 
 
 @router.post("/api/users/{user_id}/safety-snapshot/refresh", response_model=SafetySnapshotRefreshResponse)

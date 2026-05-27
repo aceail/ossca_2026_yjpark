@@ -142,6 +142,8 @@ class ScenarioCardResponse(BaseModel):
     sentences: dict[str, Optional[str]]  # fact, feeling, micro_action
     safety_message: Optional[str] = None
     persona: PersonaInfo
+    signal_level: str = "normal"                    # normal | elevated | high
+    moral_licensing_nudge: Optional[str] = None     # 24h 사용 빈도 너지
 
 
 class DecisionRequest(BaseModel):
@@ -194,6 +196,7 @@ class SafetySnapshotItem(BaseModel):
 class SafetyTrendResponse(BaseModel):
     user_id: str
     weeks: list[SafetySnapshotItem]
+    signal_level: str = "normal"  # normal | elevated | high — 최근 7일 누적
 
 
 class SafetySnapshotRefreshResponse(BaseModel):

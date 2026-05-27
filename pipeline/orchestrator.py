@@ -10,7 +10,7 @@ import sqlite3
 import sys
 import urllib.request
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +20,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from db import open_db, migrate, get_persona  # noqa: E402
 from persona import seed_builtin_prompts, FORBIDDEN_GROUPS  # noqa: E402
 from probe import ProbeEngine, select_active_prompt  # noqa: E402
+from regret import compute_signal_level  # noqa: E402
 
 # ────────────────────────────────────────────────────────────────────
 # Safety keyword detection (§6.5 F)
@@ -33,6 +34,26 @@ SAFETY_HARD_KEYWORDS: list[str] = [
 SAFETY_SOFT_MESSAGE = (
     "지금 문장은 평소보다 강한 고통 신호로 읽힙니다. "
     "오늘은 후회 시나리오 대신 부담 낮은 응답으로 전환할게요."
+)
+
+# P0-9: Slow Harm 누적 신호 — 급성 키워드는 없지만 시계열 누적이 임계 초과
+SAFETY_SLOW_HARM_MESSAGE = (
+    "최근 며칠간 자기 비난·실패 이미지가 평소보다 자주 보입니다. "
+    "오늘은 부담 낮은 응답으로 전환할게요. 한 줄만 적어도 충분해요."
+)
+
+# P0-9: elevated 신호 시 페르소나 system_prompt 상단에 주입할 안전 후크
+ELEVATED_TONE_PREFIX = (
+    "[안전 모드] 최근 사용자 텍스트에 자기 비난·정체성 실패 표현이 누적되었습니다. "
+    "이 응답에서는 비난·낙인·강한 명령형을 금지하고, 평소보다 부드럽고 짧게, "
+    "사실은 1문장으로만, 작은 행동 제안 1개로만 응답하세요."
+)
+
+# P0-24: Moral Licensing — 24시간 내 동일 사용자 세션 수가 이 값 이상이면 너지
+MORAL_LICENSING_THRESHOLD = 5
+MORAL_LICENSING_NUDGE = (
+    "오늘 이 도구를 자주 열었네요. 이 앱 자체가 또 다른 미루기 대상이 되고 있지는 않은지 "
+    "잠깐만 멈춰서 살펴봐요. 지금 정말 필요한 건 한 줄 적기일 수도 있고, 그냥 닫는 것일 수도 있어요."
 )
 
 # 절대 금지어 (출력 거부용 — §6.5 F)
@@ -126,6 +147,8 @@ class ScenarioCard:
     feeling: str | None
     micro_action: str | None
     safety_message: str | None
+    signal_level: str = "normal"
+    moral_licensing_nudge: str | None = None
 
 
 @dataclass(frozen=True)
@@ -222,8 +245,13 @@ class SessionOrchestrator:
         avoidance_input: str,
         timeline_hint: str | None = None,
     ) -> ScenarioCard:
-        """Safety 검사 → LLM 호출 → ScenarioCard INSERT."""
-        # Safety 검사
+        """Safety 검사 → Slow Harm 게이트 → LLM 호출 → ScenarioCard INSERT."""
+        # P0-9: Slow Harm 시계열 신호 (generate 직전 호출)
+        signal = compute_signal_level(self.conn, user_id)
+        # P0-24: 24h 사용 빈도 너지
+        nudge = self._moral_licensing_nudge(user_id)
+
+        # 1. 급성 자해 키워드 → soft_stop (최우선)
         if _is_safety_trigger(avoidance_input):
             return self._insert_card(
                 session_id=session_id,
@@ -233,6 +261,22 @@ class SessionOrchestrator:
                 feeling=None,
                 micro_action=None,
                 safety_message=SAFETY_SOFT_MESSAGE,
+                signal_level=signal,
+                moral_licensing_nudge=nudge,
+            )
+
+        # 2. 누적 Slow Harm 'high' → soft_stop 강제 (비임상 어휘)
+        if signal == "high":
+            return self._insert_card(
+                session_id=session_id,
+                card_type="soft_stop",
+                persona_id=None,
+                fact=None,
+                feeling=None,
+                micro_action=None,
+                safety_message=SAFETY_SLOW_HARM_MESSAGE,
+                signal_level=signal,
+                moral_licensing_nudge=nudge,
             )
 
         # 활성 페르소나 프롬프트
@@ -247,6 +291,10 @@ class SessionOrchestrator:
             "SELECT name FROM Persona WHERE id = ?", (persona_id,)
         ).fetchone() if persona_id else None
         persona_name = persona_row["name"] if persona_row else "내일의 나"
+
+        # 3. elevated 신호 → 시스템 프롬프트 앞에 안전 후크 prefix
+        if signal == "elevated":
+            system_prompt = f"{ELEVATED_TONE_PREFIX}\n\n{system_prompt or ''}"
 
         # 사용자 메시지 구성
         user_msg = avoidance_input
@@ -267,6 +315,8 @@ class SessionOrchestrator:
                 feeling=None,
                 micro_action=None,
                 safety_message=f"시나리오 생성 중 오류가 발생했습니다. ({exc})",
+                signal_level=signal,
+                moral_licensing_nudge=nudge,
             )
 
         card_type = parsed.get("card_type", "regret")
@@ -284,6 +334,8 @@ class SessionOrchestrator:
                 feeling=None,
                 micro_action=None,
                 safety_message=msg,
+                signal_level=signal,
+                moral_licensing_nudge=nudge,
             )
 
         # regret / recovery
@@ -303,6 +355,8 @@ class SessionOrchestrator:
                 feeling=None,
                 micro_action=None,
                 safety_message=SAFETY_SOFT_MESSAGE,
+                signal_level=signal,
+                moral_licensing_nudge=nudge,
             )
 
         return self._insert_card(
@@ -313,7 +367,19 @@ class SessionOrchestrator:
             feeling=feeling,
             micro_action=micro_action,
             safety_message=None,
+            signal_level=signal,
+            moral_licensing_nudge=nudge,
         )
+
+    def _moral_licensing_nudge(self, user_id: str) -> str | None:
+        """P0-24: 최근 24h 세션 수 ≥ 임계 → 너지 메시지."""
+        since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        row = self.conn.execute(
+            "SELECT COUNT(*) AS n FROM AvoidanceSession WHERE user_id = ? AND created_at >= ?",
+            (user_id, since),
+        ).fetchone()
+        count = row["n"] if row else 0
+        return MORAL_LICENSING_NUDGE if count >= MORAL_LICENSING_THRESHOLD else None
 
     def _insert_card(
         self,
@@ -325,6 +391,8 @@ class SessionOrchestrator:
         feeling: str | None,
         micro_action: str | None,
         safety_message: str | None,
+        signal_level: str = "normal",
+        moral_licensing_nudge: str | None = None,
     ) -> ScenarioCard:
         now = datetime.now(timezone.utc).isoformat()
         cur = self.conn.execute(
@@ -360,6 +428,8 @@ class SessionOrchestrator:
             feeling=feeling,
             micro_action=micro_action,
             safety_message=safety_message,
+            signal_level=signal_level,
+            moral_licensing_nudge=moral_licensing_nudge,
         )
 
     # ── 5. 결정 기록 ──────────────────────────────────────────────

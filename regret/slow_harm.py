@@ -12,10 +12,18 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from typing import Literal
 
 
 SELF_BLAME_WORDS = ["한심", "쓰레기", "병신", "또 이러네", "나는 안 돼", "역시"]
 IDENTITY_FAILURE_PHRASES = ["또 이러네", "원래 그런", "어차피", "나는 늘"]
+
+SignalLevel = Literal["normal", "elevated", "high"]
+
+SIGNAL_THRESHOLDS: dict[str, dict[str, float]] = {
+    "high":     {"blame": 8, "identity": 5, "failure_ratio": 0.85},
+    "elevated": {"blame": 3, "identity": 2, "failure_ratio": 0.60},
+}
 
 
 def week_start_iso(dt: datetime | None = None) -> str:
@@ -107,3 +115,33 @@ def build_weekly_snapshot(
         (user_id, week),
     ).fetchone()
     return row["id"]
+
+
+def compute_signal_level(
+    conn: sqlite3.Connection,
+    user_id: str,
+    *,
+    now: datetime | None = None,
+) -> SignalLevel:
+    """최근 7일 신호로 normal/elevated/high 분류.
+
+    P0-9: generate_scenario 직전 호출 → high면 soft_stop 강제,
+    elevated면 페르소나 톤 자동 완화. 결정 비대칭(과대보호 선호).
+    """
+    anchor = now or datetime.now(timezone.utc)
+    since = (anchor - timedelta(days=7)).isoformat()
+    monitor = SlowHarmMonitor(user_id=user_id)
+    texts = monitor.collect_user_text(conn, since)
+    blame = monitor.count_blame(texts)
+    identity = monitor.count_identity_failure(texts)
+    failure_ratio = monitor.failure_imagery_ratio(conn, since)
+
+    high = SIGNAL_THRESHOLDS["high"]
+    if blame >= high["blame"] or identity >= high["identity"] or failure_ratio >= high["failure_ratio"]:
+        return "high"
+
+    elev = SIGNAL_THRESHOLDS["elevated"]
+    if blame >= elev["blame"] or identity >= elev["identity"] or failure_ratio >= elev["failure_ratio"]:
+        return "elevated"
+
+    return "normal"
