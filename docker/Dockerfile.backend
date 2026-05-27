@@ -1,0 +1,33 @@
+# 내일의 너 backend — FastAPI + Uvicorn.
+# Sprint 23: 운영 배포용 stage 1 컨테이너.
+
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# 시스템 의존성 (cryptography 빌드용 + sqlite3 CLI)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    sqlite3 \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# 우리 backend는 표준 stdlib·fastapi·pydantic·cryptography·pywebpush(옵션)만 필요.
+# requirements.txt 없는 환경 — 명시 install.
+RUN pip install --no-cache-dir \
+    'fastapi>=0.110' \
+    'uvicorn[standard]>=0.27' \
+    'pydantic>=2.6' \
+    'cryptography>=42' \
+    'pywebpush>=2.0'
+
+COPY . /app
+
+# 컨테이너 안 DB는 /data 볼륨에 — host에서 마운트
+ENV TOMORROW_YOU_DB=/data/tomorrow_you.db
+ENV PYTHONPATH=/app
+
+EXPOSE 8001
+
+# 사용자 DB·Fernet key·VAPID는 host volume 또는 env로 주입
+CMD ["python", "-m", "uvicorn", "backend.main:app", \
+     "--host", "0.0.0.0", "--port", "8001"]

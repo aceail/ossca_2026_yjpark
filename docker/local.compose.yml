@@ -1,0 +1,71 @@
+# Local 모드 운영용 docker-compose.
+# 같은 머신에 Ollama·SQLite·우리 backend·frontend 한 번에 띄움.
+#
+# 사용:
+#   cp .env.example .env  + 키 채움
+#   cp frontend/.env.example frontend/.env.local + 채움
+#   docker compose -f docker/local.compose.yml --env-file .env up -d
+#
+# Note: Ollama는 GPU 또는 큰 RAM 필요 — 모델은 ollama_data 볼륨에 캐시.
+
+version: "3.9"
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: naeil-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+    container_name: naeil-backend
+    restart: unless-stopped
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      TOMORROW_YOU_DB: /data/tomorrow_you.db
+      NAEIL_AGENT_MODEL: ${NAEIL_AGENT_MODEL:-qwen3:8b}
+      NAEIL_AGENT_TOOLS: "1"
+      NAEIL_WATCH_INTERVAL_MIN: ${NAEIL_WATCH_INTERVAL_MIN:-30}
+      NAEIL_FOLLOWUP_INTERVAL_MIN: ${NAEIL_FOLLOWUP_INTERVAL_MIN:-60}
+      NAEIL_REFLECTION_INTERVAL_HOURS: ${NAEIL_REFLECTION_INTERVAL_HOURS:-12}
+      NAEIL_VAPID_PUBLIC_KEY: ${NAEIL_VAPID_PUBLIC_KEY:-}
+      NAEIL_VAPID_PRIVATE_KEY: ${NAEIL_VAPID_PRIVATE_KEY:-}
+      NAEIL_VAPID_SUBJECT: ${NAEIL_VAPID_SUBJECT:-mailto:admin@example.com}
+      TOMORROW_YOU_FERNET_PASSPHRASE: ${TOMORROW_YOU_FERNET_PASSPHRASE:-}
+      # Ollama 컨테이너로 라우트
+      OLLAMA_HOST: http://ollama:11434
+    volumes:
+      - naeil_data:/data
+    ports:
+      - "8001:8001"
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
+      args:
+        NEXT_PUBLIC_API_BASE: ${PUBLIC_API_BASE:-http://localhost:8001}
+        NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NAEIL_VAPID_PUBLIC_KEY:-}
+    container_name: naeil-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+
+volumes:
+  ollama_data:
+  naeil_data:
