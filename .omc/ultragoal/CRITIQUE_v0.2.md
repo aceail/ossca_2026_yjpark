@@ -111,10 +111,15 @@ v0.2를 "출시"라 부른 건 잘못된 표현 — 현재는 **v0.2 prototype +
 - [x] 신규 API — `GET/POST/DELETE /api/users/{user_id}/agent-consents[/{tool_id}]` (require_token 적용).
 - [x] frontend settings에 "외부 도구 연결 동의" 섹션 — calendar/files/search 각 도구별 토글, hint 텍스트 동봉.
 
+### v0.3 sprint 9 (closed 2026-05-27)
+**Idempotency keys**:
+- [x] P0-16 마이그레이션 011 — `IdempotencyKey(user_id, endpoint, key, response_json, status_code, created_at, UNIQUE)`. TTL 24h (read 시 cutoff 검사).
+- [x] `backend/idempotency.py` — `check_idempotency` / `store_idempotency` 헬퍼. INSERT OR IGNORE로 first-writer-wins.
+- [x] `POST /api/sessions`에 적용 — Idempotency-Key 헤더 같은 값으로 재요청 시 같은 session_id 반환, 회피 입력 row는 하나만 생성. 다른 endpoint도 동일 패턴으로 확장 가능.
+
 ### v0.3 본격 (다음 라운드)
 **Complex**:
 - P0-10 평가 baseline 재정의 (3중 진실원 통합, repair loop 추가)
-- P0-16 작업 큐 + idempotency
 
 ## 5. OSSCA 멘토 제출 전 필수 게이트
 

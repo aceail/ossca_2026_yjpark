@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import sqlite3
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 
 from pipeline import SessionOrchestrator
 from backend.schemas import (
@@ -24,6 +25,7 @@ from backend.deps import (
     require_token_for_session,
     resolve_user_from_token,
 )
+from backend.idempotency import check_idempotency, store_idempotency
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -37,9 +39,25 @@ def create_session(
     body: CreateSessionRequest,
     conn: sqlite3.Connection = Depends(get_db),
     token_user_id: str = Depends(resolve_user_from_token),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ) -> CreateSessionResponse:
-    """SessionOrchestrator.start_session → session_id 반환."""
+    """SessionOrchestrator.start_session → session_id 반환.
+
+    P0-16: Idempotency-Key 헤더가 있고 같은 (user, endpoint, key) 조합이
+    24h 내에 처리되었으면 캐시 응답 그대로 반환 — 더블 클릭으로 같은 회피
+    입력이 두 번 기록되는 것을 막는다.
+    """
     assert_user_matches(token_user_id, body.user_id)
+
+    cached = check_idempotency(
+        conn,
+        user_id=token_user_id,
+        endpoint="POST /api/sessions",
+        key=idempotency_key,
+    )
+    if cached:
+        return CreateSessionResponse(**cached)
+
     # user 존재 확인
     user = conn.execute("SELECT id FROM User WHERE id = ?", (body.user_id,)).fetchone()
     if not user:
@@ -51,7 +69,16 @@ def create_session(
         body.avoidance_input,
         timeline_hint=body.timeline_hint,
     )
-    return CreateSessionResponse(session_id=session_id)
+    response = CreateSessionResponse(session_id=session_id)
+    store_idempotency(
+        conn,
+        user_id=token_user_id,
+        endpoint="POST /api/sessions",
+        key=idempotency_key,
+        response=response.model_dump(),
+        status_code=201,
+    )
+    return response
 
 
 @router.get("/{session_id}/probe", response_model=ProbeQuestionResponse)
