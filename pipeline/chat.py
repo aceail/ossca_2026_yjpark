@@ -22,7 +22,13 @@ from datetime import datetime, timezone
 from typing import Optional
 
 OLLAMA_CHAT_URL = "http://127.0.0.1:11434/api/chat"
-OLLAMA_MODEL = "exaone3.5:7.8b"
+# Sprint 18: Hermes-style agent model. EXAONE은 tools API 미검증.
+# qwen3:8b가 OSS·tools API 잘 지원하고 7GB로 가벼움. 환경변수로 swap.
+import os as _os_chat
+OLLAMA_MODEL = _os_chat.environ.get("NAEIL_AGENT_MODEL", "qwen3:8b")
+OLLAMA_FALLBACK_MODEL = _os_chat.environ.get("NAEIL_AGENT_FALLBACK", "exaone3.5:7.8b")
+AGENT_MAX_TOOL_ROUNDS = int(_os_chat.environ.get("NAEIL_AGENT_MAX_TOOL_ROUNDS", "4"))
+AGENT_TOOLS_ENABLED = _os_chat.environ.get("NAEIL_AGENT_TOOLS", "1") == "1"
 
 def _today_kst_str() -> str:
     """LLM이 연도·월을 추측하지 않도록 매 호출 system prompt에 오늘 날짜를 박는다.
@@ -341,13 +347,22 @@ def _call_ollama_chat(
     timeout: int = 60,
     num_predict: int = 300,
     temperature: float = 0.7,
-) -> str:
-    payload = {
+    tools: Optional[list[dict]] = None,
+) -> dict:
+    """Ollama /api/chat 호출 — tools 인자 지원 (Sprint 18 Hermes-style).
+
+    반환은 raw message dict: {"role":"assistant","content":"...","tool_calls":[...]}.
+    이전 시그니처(.strip() 호출)와의 호환을 위해 caller가 str으로 받으면 안 되므로
+    backend 호출 패턴을 dispatch 위주로 갱신.
+    """
+    payload: dict = {
         "model": OLLAMA_MODEL,
         "messages": messages,
         "stream": False,
         "options": {"num_predict": num_predict, "temperature": temperature},
     }
+    if tools and AGENT_TOOLS_ENABLED:
+        payload["tools"] = tools
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     req = urllib.request.Request(
         OLLAMA_CHAT_URL,
@@ -361,7 +376,7 @@ def _call_ollama_chat(
     except Exception as exc:
         raise RuntimeError(f"Ollama chat 호출 실패: {exc}") from exc
     parsed = json.loads(body)
-    return (parsed.get("message") or {}).get("content", "")
+    return parsed.get("message") or {"role": "assistant", "content": ""}
 
 
 def create_chat_session(
@@ -417,15 +432,20 @@ def post_user_message(
     content: str,
     call_fn=None,
 ) -> dict:
-    """사용자 메시지 → 저장 → LLM 응답 생성 → action 처리 → 저장.
+    """Sprint 18: ReAct-style agent loop.
 
-    LLM이 JSON {"speak":..., "actions":[...]} 형식으로 응답하면 actions를
-    backend가 실행한 뒤 결과 라인을 speak 위에 prefix해 사용자에게 보여준다.
-    평문이면 그대로 저장.
+    각 round:
+      1) Ollama /api/chat 호출 (tools 첨부)
+      2) message.tool_calls 있으면 각 tool 실행 → role=tool 메시지 누적 → 다음 round
+      3) 없으면 종료. content가 비어 있고 tool_calls 라인만 있으면 요약 후처리
 
-    call_fn=None이면 모듈 globals에서 _call_ollama_chat을 조회 — 테스트가
-    `patch("pipeline.chat._call_ollama_chat", ...)` 로 대체할 수 있게 한다.
+    AGENT_MAX_TOOL_ROUNDS 횟수 초과 시 강제 종료. tools 미지원·실패 시 plain
+    content로 fallback. backward compat: 이전의 JSON-action 패턴도 LLM이 그렇게
+    응답하면 동일하게 처리.
     """
+    from pipeline.tools import dispatch as _tool_dispatch
+    from pipeline.tools import tool_schemas_for_ollama
+
     sess = conn.execute(
         "SELECT user_id, persona_id FROM ChatSession WHERE id = ?", (session_id,),
     ).fetchone()
@@ -435,38 +455,96 @@ def post_user_message(
     # 1. user 메시지 저장
     _record_message(conn, session_id, "user", content)
 
-    # 2. 누적 메시지 + system prompt 구성
+    # 2. 누적 메시지 + system prompt
     system_prompt = _persona_system_prompt(conn, sess["persona_id"])
     history = _load_history(conn, session_id)
-    messages = [{"role": "system", "content": system_prompt}] + history
+    messages: list[dict] = [{"role": "system", "content": system_prompt}] + history
 
-    # 3. LLM 호출 (module-level lookup for patchability)
     fn = call_fn if call_fn is not None else _call_ollama_chat
-    try:
-        raw_reply = fn(messages).strip()
-    except Exception as exc:
-        raw_reply = f"(응답 생성 중 오류: {exc})"
+    tools = tool_schemas_for_ollama() if AGENT_TOOLS_ENABLED else None
 
-    if not raw_reply:
-        raw_reply = "(빈 응답)"
+    final_content = ""
+    action_lines: list[str] = []
+    tool_calls_total = 0
 
-    # 4. Wave 1: action 파싱·실행
-    parsed = _try_parse_action_response(raw_reply)
-    if parsed is None:
-        final_reply = raw_reply
-    else:
-        action_lines = _execute_actions(
-            conn,
-            user_id=sess["user_id"],
-            actions=parsed["actions"],
+    for _round in range(AGENT_MAX_TOOL_ROUNDS):
+        try:
+            msg = fn(messages, tools=tools) if tools else fn(messages)
+        except TypeError:
+            # 옛 시그니처 (tools 인자 미지원) — fallback
+            msg = fn(messages)
+        except Exception as exc:
+            final_content = f"(응답 생성 중 오류: {exc})"
+            break
+
+        # 이전 모듈 시그니처(str)와 새 시그니처(dict) 모두 호환
+        if isinstance(msg, str):
+            final_content = msg
+            break
+
+        tool_calls = msg.get("tool_calls") or []
+        if not tool_calls:
+            final_content = (msg.get("content") or "").strip()
+            break
+
+        # tool 실행 + 결과를 다음 round 메시지로
+        messages.append({
+            "role": "assistant",
+            "content": msg.get("content") or "",
+            "tool_calls": tool_calls,
+        })
+        for call in tool_calls:
+            tool_calls_total += 1
+            fn_block = call.get("function") or {}
+            name = fn_block.get("name", "")
+            args = fn_block.get("arguments")
+            result = _tool_dispatch(
+                conn, user_id=sess["user_id"], name=name, arguments=args,
+            )
+            # 사용자에게 보일 간략 라인
+            if result.get("ok"):
+                if name == "create_task":
+                    action_lines.append(f"✅ '{result.get('title')}' 등록 — 마감 {result.get('deadline') or '미정'}")
+                elif name == "update_task":
+                    action_lines.append(f"✓ '{result.get('title')}' 갱신")
+                elif name == "delete_task":
+                    action_lines.append(f"⊗ '{result.get('title')}' 삭제")
+            else:
+                action_lines.append(f"⚠ {name}: {result.get('error', '실패')}")
+            messages.append({
+                "role": "tool",
+                "name": name,
+                "content": json.dumps(result, ensure_ascii=False),
+            })
+
+    if not final_content and not action_lines:
+        # 응답 패턴 다 비어있으면 옛 JSON-action 패턴 시도 (backward compat)
+        try:
+            raw = fn(messages) if tools is None else fn(messages)
+            if isinstance(raw, dict):
+                final_content = (raw.get("content") or "").strip()
+            elif isinstance(raw, str):
+                final_content = raw.strip()
+        except Exception:
+            final_content = "(빈 응답)"
+
+    # backward compat: JSON-action 패턴도 처리
+    parsed = _try_parse_action_response(final_content)
+    if parsed is not None:
+        legacy_lines = _execute_actions(
+            conn, user_id=sess["user_id"], actions=parsed["actions"],
         )
-        # action 결과 라인이 있으면 speak 위에 prefix, 없으면 speak만
-        if action_lines:
-            final_reply = "\n".join(action_lines) + "\n\n" + parsed["speak"]
-        else:
-            final_reply = parsed["speak"]
+        action_lines = legacy_lines + action_lines
+        final_content = parsed["speak"]
 
-    # 5. assistant 저장
+    # 최종 메시지 조립
+    if action_lines:
+        final_reply = "\n".join(action_lines)
+        if final_content:
+            final_reply += "\n\n" + final_content
+    else:
+        final_reply = final_content or "(빈 응답)"
+
     msg_id = _record_message(conn, session_id, "assistant", final_reply)
 
     return {
@@ -474,6 +552,7 @@ def post_user_message(
         "role": "assistant",
         "content": final_reply,
         "session_id": session_id,
+        "tool_calls": tool_calls_total,
     }
 
 
