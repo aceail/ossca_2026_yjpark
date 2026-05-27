@@ -39,7 +39,11 @@ def create_session(
         raise HTTPException(status_code=404, detail="User not found")
 
     orch = _get_orchestrator(conn)
-    session_id = orch.start_session(body.user_id, body.avoidance_input)
+    session_id = orch.start_session(
+        body.user_id,
+        body.avoidance_input,
+        timeline_hint=body.timeline_hint,
+    )
     return CreateSessionResponse(session_id=session_id)
 
 
@@ -110,28 +114,35 @@ def generate_scenario(
 ) -> ScenarioCardResponse:
     """orchestrator.generate_scenario → ScenarioCard. Ollama timeout 60s."""
     sess = conn.execute(
-        "SELECT user_id, avoidance_input FROM AvoidanceSession WHERE id = ?", (session_id,)
+        "SELECT user_id, avoidance_input, timeline_hint FROM AvoidanceSession WHERE id = ?", (session_id,)
     ).fetchone()
     if not sess:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # timeline_hint은 세션 생성 시 별도 저장 구조 없으므로 None
+    timeline_hint = sess["timeline_hint"] if "timeline_hint" in sess.keys() else None
     orch = _get_orchestrator(conn)
     card = orch.generate_scenario(
         user_id=sess["user_id"],
         session_id=session_id,
         avoidance_input=sess["avoidance_input"],
+        timeline_hint=timeline_hint,
     )
 
-    # persona info
+    # persona info — id/perspective/tone/greeting까지 채움 (frontend 호환)
     persona_info = PersonaInfo(name=card.persona_name or "내일의 나")
     if card.persona_id:
         p_row = conn.execute(
-            "SELECT avatar_icon, avatar_color FROM Persona WHERE id = ?", (card.persona_id,)
+            "SELECT id, name, perspective, tone_mode, greeting, avatar_icon, avatar_color "
+            "FROM Persona WHERE id = ?",
+            (card.persona_id,),
         ).fetchone()
         if p_row:
             persona_info = PersonaInfo(
-                name=card.persona_name or "내일의 나",
+                id=p_row["id"],
+                name=p_row["name"] or card.persona_name or "내일의 나",
+                perspective=p_row["perspective"],
+                tone_mode=p_row["tone_mode"],
+                greeting=p_row["greeting"],
                 icon=p_row["avatar_icon"],
                 color=p_row["avatar_color"],
             )

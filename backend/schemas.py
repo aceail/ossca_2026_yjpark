@@ -127,7 +127,11 @@ class ProbeAnswerResponse(BaseModel):
 
 
 class PersonaInfo(BaseModel):
+    id: Optional[int] = None
     name: str
+    perspective: Optional[str] = None      # '1st' | '2nd' | '3rd'
+    tone_mode: Optional[str] = None        # 'Quiet' | 'Sharp' | 'Witty' | 'Savage'
+    greeting: Optional[str] = None
     icon: Optional[str] = None
     color: Optional[str] = None
 

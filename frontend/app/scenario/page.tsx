@@ -541,10 +541,10 @@ export default function ScenarioPage() {
         </section>
       </SocialBlurGuard>
 
-      {/* UndoToast */}
+      {/* 정직 처리: UNDO 미구현이라 onUndo 미전달 → "되돌리기" 버튼 노출 X */}
       {showUndoToast && (
         <UndoToast
-          message="메시지가 삭제됐어요."
+          message="메시지가 영구 삭제됐어요. 복구할 수 없어요."
           durationMs={3000}
           onDismiss={() => setShowUndoToast(false)}
         />

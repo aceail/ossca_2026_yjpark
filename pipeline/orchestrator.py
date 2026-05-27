@@ -148,13 +148,18 @@ class SessionOrchestrator:
 
     # ── 1. 세션 시작 ──────────────────────────────────────────────
 
-    def start_session(self, user_id: str, avoidance_input: str) -> int:
+    def start_session(
+        self,
+        user_id: str,
+        avoidance_input: str,
+        timeline_hint: str | None = None,
+    ) -> int:
         """AvoidanceSession INSERT → session_id 반환."""
         now = datetime.now(timezone.utc).isoformat()
         cur = self.conn.execute(
-            """INSERT INTO AvoidanceSession (user_id, avoidance_input, created_at)
-               VALUES (?, ?, ?)""",
-            (user_id, avoidance_input, now),
+            """INSERT INTO AvoidanceSession (user_id, avoidance_input, timeline_hint, created_at)
+               VALUES (?, ?, ?, ?)""",
+            (user_id, avoidance_input, timeline_hint, now),
         )
         self.conn.commit()
         return cur.lastrowid

@@ -16,15 +16,33 @@ export type ToneFeedbackKind =
   | "not_relevant"
   | "just_right";
 
+export interface PersonaInfo {
+  id?: number;
+  name: string;
+  perspective?: "1st" | "2nd" | "3rd";
+  tone_mode?: "Quiet" | "Sharp" | "Witty" | "Savage";
+  greeting?: string;
+  icon?: string;
+  color?: string;
+}
+
 export interface ScenarioCard {
-  id: string;
-  session_id: string;
+  card_id?: number;          // backend canonical
+  id?: string;               // legacy alias
+  session_id?: string;
   card_type: CardType;
-  fact: string;
-  feeling: string;
-  micro_action: string;
-  persona_id: number;
-  created_at: string;
+  fact?: string;             // soft_stop/paradox는 null
+  feeling?: string;
+  micro_action?: string;
+  safety_message?: string;   // soft_stop/paradox
+  persona?: PersonaInfo;
+  persona_id?: number;
+  created_at?: string;
+  sentences?: {              // backend response 구조 (호환)
+    fact?: string | null;
+    feeling?: string | null;
+    micro_action?: string | null;
+  };
 }
 
 export interface AvoidanceSession {

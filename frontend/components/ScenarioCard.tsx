@@ -184,7 +184,7 @@ export function ScenarioCard({
                 color: "var(--color-text-primary)",
               }}
             >
-              {card.fact}
+              {card.safety_message ?? card.fact}
             </p>
             <hr style={{ borderColor: styles.border, opacity: 0.4 }} />
             <div
@@ -218,7 +218,7 @@ export function ScenarioCard({
                 color: "var(--color-text-primary)",
               }}
             >
-              {card.fact}
+              {card.safety_message ?? card.fact}
             </p>
             <hr style={{ borderColor: styles.border, opacity: 0.4 }} />
             <div className="flex justify-center">
