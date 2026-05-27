@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useUser } from "../../lib/hooks/useUser";
 import { Button } from "../../components/Button";
-import { authHeaders, getToken } from "../../lib/auth";
+import { authHeaders } from "../../lib/auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8001";
 
@@ -43,9 +43,7 @@ export default function CalendarPage() {
   const { userId, loading: userLoading } = useUser();
   const [cursor, setCursor] = useState<Date>(() => new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [subscribeOpen, setSubscribeOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
 
   const fetchEvents = useCallback(async (uid: string) => {
     try {
@@ -83,21 +81,6 @@ export default function CalendarPage() {
   const monthLabel = `${cursor.getFullYear()}년 ${cursor.getMonth() + 1}월`;
   const today = ymdLocal(new Date());
 
-  const icsUrl = userId
-    ? `${API_BASE}/api/calendar/${userId}/feed.ics?token=${encodeURIComponent(getToken() ?? "")}`
-    : "";
-
-  const copyIcs = async () => {
-    if (!icsUrl) return;
-    try {
-      await navigator.clipboard.writeText(icsUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // graceful: 일부 브라우저는 권한 거부
-    }
-  };
-
   if (userLoading) {
     return (
       <main className="p-8 min-h-screen" style={{ backgroundColor: "var(--color-bg-base)" }}>
@@ -120,51 +103,19 @@ export default function CalendarPage() {
             마감일이 있는 작업이 여기 표시돼요
           </p>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => setSubscribeOpen((p) => !p)}>
-          외부 캘린더에서 구독
-        </Button>
+        <a
+          href="/settings#external-calendar"
+          className="text-[12px] underline-offset-2 hover:underline"
+          style={{ color: "var(--color-text-secondary)" }}
+        >
+          외부 캘린더 연동 →
+        </a>
       </header>
 
       {error && (
         <p className="text-[12px] mb-3" style={{ color: "#B00020" }}>
           {error}
         </p>
-      )}
-
-      {subscribeOpen && (
-        <section
-          className="rounded-xl px-4 py-3 mb-5"
-          style={{
-            backgroundColor: "var(--color-bg-card)",
-            border: "1px solid var(--color-border-subtle)",
-          }}
-        >
-          <p className="text-[12px] mb-2" style={{ color: "var(--color-text-secondary)" }}>
-            아래 URL을 Google 캘린더 또는 Apple 캘린더의 &ldquo;다른 캘린더 추가 → URL로 구독&rdquo;에 붙여넣으세요.
-            (이 URL은 내 device token을 포함하므로 외부로 공유하지 마세요.)
-          </p>
-          <div className="flex gap-2 items-center">
-            <input
-              readOnly
-              value={icsUrl}
-              className="flex-1 px-3 py-2 text-[12px] rounded-lg font-mono"
-              style={{
-                backgroundColor: "var(--color-bg-base)",
-                border: "1px solid var(--color-border-subtle)",
-                color: "var(--color-text-primary)",
-              }}
-              onFocus={(e) => e.currentTarget.select()}
-            />
-            <Button variant="primary" size="sm" onClick={copyIcs}>
-              {copied ? "✓ 복사됨" : "복사"}
-            </Button>
-          </div>
-          <ul className="text-[11px] mt-2 space-y-0.5" style={{ color: "var(--color-text-secondary)" }}>
-            <li>· Google: 좌측 사이드바 &ldquo;다른 캘린더&rdquo; + → &ldquo;URL로 구독&rdquo;</li>
-            <li>· Apple (macOS): 파일 → 새로운 캘린더 구독 → URL 붙여넣기</li>
-            <li>· Apple (iOS): 설정 → 캘린더 → 계정 → 다른 계정 추가 → 캘린더 구독</li>
-          </ul>
-        </section>
       )}
 
       <div className="flex items-center justify-between mb-3">

@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useUser } from "../../lib/hooks/useUser";
 import { Button } from "../../components/Button";
-import { authHeaders } from "../../lib/auth";
+import { authHeaders, getToken } from "../../lib/auth";
 import type { Persona } from "../../lib/personas";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8001";
@@ -113,6 +113,23 @@ export default function SettingsPage() {
   const [pushAvailable, setPushAvailable] = useState(false);
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
+
+  // Sprint 16: 외부 캘린더 ICS 구독
+  const [icsCopied, setIcsCopied] = useState(false);
+  const icsUrl = userId
+    ? `${API_BASE}/api/calendar/${userId}/feed.ics?token=${encodeURIComponent(getToken() ?? "")}`
+    : "";
+
+  const copyIcs = async () => {
+    if (!icsUrl) return;
+    try {
+      await navigator.clipboard.writeText(icsUrl);
+      setIcsCopied(true);
+      setTimeout(() => setIcsCopied(false), 2000);
+    } catch {
+      // graceful
+    }
+  };
 
   const [toasts, setToasts] = useState<Toast[]>([]);
 
@@ -628,6 +645,37 @@ export default function SettingsPage() {
               {pushBusy ? "..." : pushSubscribed ? "끄기" : "켜기"}
             </Button>
           </div>
+        </section>
+
+        {/* 섹션 2.8: 외부 캘린더 연동 (ICS subscribe) */}
+        <section id="external-calendar">
+          <h2 className="text-[14px] font-semibold mb-1" style={{ fontFamily: "var(--font-feeling)" }}>
+            외부 캘린더 연동
+          </h2>
+          <p className="text-[12px] mb-3" style={{ color: "var(--color-text-secondary)" }}>
+            Google · Apple 캘린더에 우리 작업을 동기화. 아래 URL을 외부 캘린더의 &ldquo;URL로 구독&rdquo;에 붙여넣으세요. (이 URL은 내 token을 포함하므로 외부 공유 금지.)
+          </p>
+          <div className="flex gap-2 items-center">
+            <input
+              readOnly
+              value={icsUrl}
+              className="flex-1 px-3 py-2 text-[12px] rounded-lg font-mono"
+              style={{
+                backgroundColor: "var(--color-bg-card)",
+                border: "1px solid var(--color-border-subtle)",
+                color: "var(--color-text-primary)",
+              }}
+              onFocus={(e) => e.currentTarget.select()}
+            />
+            <Button variant="primary" size="sm" onClick={copyIcs}>
+              {icsCopied ? "✓ 복사됨" : "복사"}
+            </Button>
+          </div>
+          <ul className="text-[11px] mt-2 space-y-0.5" style={{ color: "var(--color-text-secondary)" }}>
+            <li>· Google: 좌측 사이드바 &ldquo;다른 캘린더&rdquo; + → &ldquo;URL로 구독&rdquo;</li>
+            <li>· Apple (macOS): 파일 → 새로운 캘린더 구독 → URL</li>
+            <li>· Apple (iOS): 설정 → 캘린더 → 계정 → 다른 계정 추가 → 캘린더 구독</li>
+          </ul>
         </section>
 
         {/* 섹션 3: Safety 트렌드 */}
