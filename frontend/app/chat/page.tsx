@@ -142,12 +142,29 @@ export default function ChatPage() {
     [fetchSessions, fetchMessages],
   );
 
+  // Sprint 22: 오늘 첫 브리핑 트리거. backend가 cooldown 관리.
+  const triggerBriefing = useCallback(async (uid: string) => {
+    try {
+      await fetch(`${API_BASE}/api/chat/briefing?user_id=${uid}`, {
+        method: "POST",
+        headers: { ...authHeaders() },
+      });
+    } catch {
+      // silent — 브리핑 실패가 chat 동작 막지 않게
+    }
+  }, []);
+
   useEffect(() => {
     if (userId) {
-      ensureSession(userId);
+      ensureSession(userId).then(() => {
+        triggerBriefing(userId);
+        if (sessionId) {
+          fetchMessages(sessionId).then(setMessages);
+        }
+      });
       refreshTaskSummary(userId);
     }
-  }, [userId, ensureSession, refreshTaskSummary]);
+  }, [userId, ensureSession, refreshTaskSummary, triggerBriefing, sessionId, fetchMessages]);
 
   // Sprint 17: chat 페이지 진입 시 Notification 권한 한 번 요청
   useEffect(() => {

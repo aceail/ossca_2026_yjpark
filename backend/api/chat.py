@@ -136,6 +136,35 @@ def post_message(
     return PostMessageResponse(assistant=ChatMessageItem(**assistant))
 
 
+class BriefingResponse(BaseModel):
+    sent: bool
+    reason: Optional[str] = None
+    session_id: Optional[int] = None
+    message_id: Optional[int] = None
+    content: Optional[str] = None
+
+
+@router.post("/briefing", response_model=BriefingResponse)
+def trigger_briefing(
+    user_id: str,
+    conn: sqlite3.Connection = Depends(get_db),
+    token_user_id: str = Depends(resolve_user_from_token),
+) -> BriefingResponse:
+    """Sprint 22: 오늘 첫 브리핑 한 번만 생성. cooldown 적용. frontend가 chat
+    페이지 마운트 시 한 번 호출."""
+    assert_user_matches(token_user_id, user_id)
+    from pipeline.briefing import generate_briefing
+
+    result = generate_briefing(conn, user_id)
+    return BriefingResponse(
+        sent=result.get("sent", False),
+        reason=result.get("reason"),
+        session_id=result.get("session_id"),
+        message_id=result.get("message_id"),
+        content=result.get("content"),
+    )
+
+
 @router.get("/sessions/{session_id}/messages", response_model=ListMessagesResponse)
 def get_messages(
     session_id: int,
