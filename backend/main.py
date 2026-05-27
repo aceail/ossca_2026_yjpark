@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from db import open_db, migrate
 from persona import seed_builtin_prompts
 from pipeline.folder_watch import scan_open_tasks
+from pipeline.followup import dispatch_due_followups
 from backend.deps import DB_PATH
 from backend.api import users, personas, onboarding, sessions, regret, safety, tone_feedback, consent, chat, tasks
 
@@ -40,6 +41,22 @@ async def _folder_watch_loop(interval_seconds: int) -> None:
             continue
 
 
+async def _followup_loop(interval_seconds: int) -> None:
+    """Wave 3: 주기 follow-up dispatch."""
+    while True:
+        try:
+            await asyncio.sleep(interval_seconds)
+            conn = open_db(DB_PATH)
+            try:
+                dispatch_due_followups(conn)
+            finally:
+                conn.close()
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            continue
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """시작 시 DB migrate + seed_builtin_prompts + folder watch task."""
@@ -49,21 +66,28 @@ async def lifespan(app: FastAPI):
     conn.close()
 
     watch_task = None
+    followup_task = None
     if os.environ.get("NAEIL_DISABLE_WATCH") != "1":
         interval_min = int(os.environ.get("NAEIL_WATCH_INTERVAL_MIN", "30"))
         watch_task = asyncio.create_task(
             _folder_watch_loop(max(interval_min, 1) * 60)
         )
+    if os.environ.get("NAEIL_DISABLE_FOLLOWUP") != "1":
+        fu_min = int(os.environ.get("NAEIL_FOLLOWUP_INTERVAL_MIN", "60"))
+        followup_task = asyncio.create_task(
+            _followup_loop(max(fu_min, 1) * 60)
+        )
 
     try:
         yield
     finally:
-        if watch_task:
-            watch_task.cancel()
-            try:
-                await watch_task
-            except asyncio.CancelledError:
-                pass
+        for t in (watch_task, followup_task):
+            if t:
+                t.cancel()
+                try:
+                    await t
+                except asyncio.CancelledError:
+                    pass
 
 
 app = FastAPI(
