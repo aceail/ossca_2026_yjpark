@@ -65,13 +65,18 @@ export default function CalendarPage() {
   const byDay = useMemo(() => eventsByDay(events), [events]);
 
   const monthDays = useMemo(() => {
-    // 일요일 시작, 6 row x 7 col grid
+    // 일요일 시작 grid. 해당 달이 차지하는 실제 주 수(4~6)만큼만 그린다.
+    // 28일·일요일 시작 (4 row) ~ 31일·금토 시작 (6 row) 범위.
     const year = cursor.getFullYear();
     const month = cursor.getMonth();
     const first = new Date(year, month, 1);
+    const lastDate = new Date(year, month + 1, 0).getDate();
     const startSunday = new Date(first);
     startSunday.setDate(first.getDate() - first.getDay());
-    return Array.from({ length: 42 }, (_, i) => {
+    const cellsNeeded = first.getDay() + lastDate;
+    const rowsNeeded = Math.ceil(cellsNeeded / 7);
+    const totalCells = rowsNeeded * 7;
+    return Array.from({ length: totalCells }, (_, i) => {
       const d = new Date(startSunday);
       d.setDate(startSunday.getDate() + i);
       return d;
