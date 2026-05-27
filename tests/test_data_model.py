@@ -25,7 +25,7 @@ EXPECTED_TABLES = {
     "Persona",
 }
 
-BUILTIN_PERSONAS = {"내일의 나", "1년 후의 나", "친한 친구 ㅈㅅ", "엄격한 코치", "객관 옵저버"}
+BUILTIN_PERSONAS = {"내일의 나", "1년 후의 나", "친한 친구", "엄격한 코치", "기록자"}
 
 
 def now() -> str:
@@ -97,8 +97,8 @@ class TestPersonaSeed(unittest.TestCase):
         personas = list_personas(self.conn, builtin_only=True)
         perspectives = {p["name"]: p["perspective"] for p in personas}
         self.assertEqual(perspectives["내일의 나"], "1st")
-        self.assertEqual(perspectives["친한 친구 ㅈㅅ"], "2nd")
-        self.assertEqual(perspectives["객관 옵저버"], "3rd")
+        self.assertEqual(perspectives["친한 친구"], "2nd")
+        self.assertEqual(perspectives["기록자"], "3rd")
 
     def test_get_persona_by_name(self):
         row = get_persona(self.conn, "내일의 나")

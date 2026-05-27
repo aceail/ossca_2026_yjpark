@@ -36,9 +36,9 @@ export default function Welcome() {
             fontWeight: 400,
           }}
         >
-          나는 지금 발표 5분 전,
+          오늘도 미뤘다.
           <br />
-          어젯밤 내가 무엇을 하고 있었는지 알고 있다.
+          내일의 내가 알고 있다.
         </p>
       </div>
 

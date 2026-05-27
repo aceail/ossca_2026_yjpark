@@ -128,7 +128,7 @@ class TestActivePromptSelector(unittest.TestCase):
         from persona import seed_builtin_prompts
         seed_builtin_prompts(self.conn)
         self.conn.execute("INSERT INTO User (id, created_at) VALUES (?, ?)", ("u1", now_iso()))
-        persona = get_persona(self.conn, "친한 친구 ㅈㅅ")
+        persona = get_persona(self.conn, "친한 친구")
         self.conn.execute(
             """INSERT INTO UserProfile
                (user_id, slots_json, completion_percent, forbidden_topics_json, active_persona_id, updated_at)

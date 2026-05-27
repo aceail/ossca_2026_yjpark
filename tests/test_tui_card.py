@@ -97,8 +97,8 @@ class TestRenderCardParadoxical(unittest.TestCase):
 class TestRenderCardRecovery(unittest.TestCase):
     def setUp(self):
         self.persona = _persona(
-            name="친한 친구 ㅈㅅ", icon="🤝", color="#C4935A",
-            greeting="야 너 지금 뭐 하는 거야ㅋ"
+            name="친한 친구", icon="🤝", color="#C4935A",
+            greeting="야 지금 뭐 해? 한 줄만 같이 쓰자"
         )
         self.sentences = {
             "fact": "운동복 입고 냉장고 앞에 있다.",

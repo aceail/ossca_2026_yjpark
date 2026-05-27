@@ -402,7 +402,7 @@ export default function ScenarioPage() {
                   letterSpacing: "0.02em",
                 }}
               >
-                내일의 너가 메시지 작성 중...
+                내일의 내가 메시지 쓰는 중...
               </p>
             </div>
           )}
