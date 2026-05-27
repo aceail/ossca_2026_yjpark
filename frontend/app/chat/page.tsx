@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "../../lib/hooks/useUser";
 import { Button } from "../../components/Button";
 import { authHeaders } from "../../lib/auth";
@@ -24,6 +24,51 @@ interface ChatSessionListItem {
   updated_at: string;
 }
 
+interface TaskSummary {
+  id: number;
+  title: string;
+  deadline_at: string | null;
+  folder_path: string | null;
+  status: string;
+}
+
+// Sprint 15: assistant 메시지 안 action 라인을 rich card로 추출
+// backend가 '✅', '📁', '✓', '📅', '✏', '⚠' prefix로 라인 만듦.
+const CARD_PREFIXES = ["✅", "📁", "✓", "📅", "✏", "⚠"];
+
+interface ParsedMessage {
+  cards: { icon: string; text: string }[];
+  body: string;
+}
+
+function parseAssistantContent(content: string): ParsedMessage {
+  const lines = content.split("\n");
+  const cards: { icon: string; text: string }[] = [];
+  const bodyLines: string[] = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const prefix = CARD_PREFIXES.find((p) => trimmed.startsWith(p));
+    if (prefix) {
+      cards.push({ icon: prefix, text: trimmed.slice(prefix.length).trim() });
+    } else {
+      bodyLines.push(line);
+    }
+  }
+  return {
+    cards,
+    body: bodyLines.join("\n").trim(),
+  };
+}
+
+function daysUntilLabel(iso: string | null): string {
+  if (!iso) return "";
+  const d = Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000);
+  if (d > 1) return `D-${d}`;
+  if (d === 1) return "내일";
+  if (d === 0) return "오늘";
+  return `${Math.abs(d)}일 지남`;
+}
+
 export default function ChatPage() {
   const { userId, loading: userLoading } = useUser();
 
@@ -33,7 +78,21 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [taskSummary, setTaskSummary] = useState<TaskSummary[]>([]);
   const listEndRef = useRef<HTMLDivElement | null>(null);
+
+  const refreshTaskSummary = useCallback(async (uid: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/tasks?user_id=${uid}&status=open`, {
+        headers: { ...authHeaders() },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setTaskSummary(data.tasks ?? []);
+    } catch {
+      // silent
+    }
+  }, []);
 
   const fetchSessions = useCallback(async (uid: string) => {
     const res = await fetch(`${API_BASE}/api/chat/sessions?user_id=${uid}`, {
@@ -81,8 +140,11 @@ export default function ChatPage() {
   );
 
   useEffect(() => {
-    if (userId) ensureSession(userId);
-  }, [userId, ensureSession]);
+    if (userId) {
+      ensureSession(userId);
+      refreshTaskSummary(userId);
+    }
+  }, [userId, ensureSession, refreshTaskSummary]);
 
   useEffect(() => {
     listEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -116,6 +178,8 @@ export default function ChatPage() {
       // 전체 히스토리 재로드 (assistant 응답 + 저장된 user 메시지 동기화)
       const fresh = await fetchMessages(sessionId);
       setMessages(fresh);
+      // task 요약 갱신 — action 결과 카드가 떴을 수 있음
+      if (userId) refreshTaskSummary(userId);
       void data;
     } catch (e) {
       setError((e as Error).message);
@@ -219,7 +283,8 @@ export default function ChatPage() {
         </aside>
 
         {/* 본문: 메시지 + 입력 */}
-        <section className="flex-1 flex flex-col min-w-0">
+        <section className="flex-1 flex flex-col min-w-0 md:border-r"
+          style={{ borderColor: "var(--color-border-subtle)" }}>
           <div className="flex-1 overflow-y-auto px-6 py-6">
             {messages.length === 0 ? (
               <p className="text-[13px] text-center mt-12" style={{ color: "var(--color-text-secondary)" }}>
@@ -229,29 +294,67 @@ export default function ChatPage() {
               <ul className="flex flex-col gap-3 max-w-[640px] mx-auto">
                 {messages.map((m) => {
                   const isUser = m.role === "user";
+                  const parsed = isUser
+                    ? null
+                    : parseAssistantContent(m.content);
                   return (
                     <li
                       key={m.id}
                       className={`flex ${isUser ? "justify-end" : "justify-start"}`}
                     >
-                      <div
-                        className="rounded-2xl px-4 py-2.5 max-w-[80%] whitespace-pre-wrap"
-                        style={{
-                          backgroundColor: isUser
-                            ? "var(--color-action-bg)"
-                            : "var(--color-bg-card)",
-                          color: isUser
-                            ? "var(--color-action-text)"
-                            : "var(--color-text-primary)",
-                          border: isUser
-                            ? "none"
-                            : "1px solid var(--color-border-subtle)",
-                          fontFamily: "var(--font-feeling)",
-                          fontSize: "var(--text-body-size)",
-                          lineHeight: "var(--text-body-line)",
-                        }}
-                      >
-                        {m.content}
+                      <div className="max-w-[80%] flex flex-col gap-1.5">
+                        {/* Action 카드 (assistant만) */}
+                        {parsed?.cards.map((c, i) => (
+                          <div
+                            key={i}
+                            className="flex items-center gap-2 rounded-xl px-3 py-2"
+                            style={{
+                              backgroundColor: c.icon === "⚠"
+                                ? "var(--color-softstop-bg)"
+                                : "var(--color-recovery-bg)",
+                              border: `1px solid ${
+                                c.icon === "⚠"
+                                  ? "var(--color-softstop-border)"
+                                  : "var(--color-recovery-border)"
+                              }`,
+                            }}
+                          >
+                            <span aria-hidden className="text-[16px] flex-shrink-0">
+                              {c.icon}
+                            </span>
+                            <span
+                              className="text-[13px]"
+                              style={{
+                                fontFamily: "var(--font-feeling)",
+                                color: "var(--color-text-primary)",
+                              }}
+                            >
+                              {c.text}
+                            </span>
+                          </div>
+                        ))}
+                        {/* 본문 (있을 때만) */}
+                        {(isUser || (parsed && parsed.body)) && (
+                          <div
+                            className="rounded-2xl px-4 py-2.5 whitespace-pre-wrap"
+                            style={{
+                              backgroundColor: isUser
+                                ? "var(--color-action-bg)"
+                                : "var(--color-bg-card)",
+                              color: isUser
+                                ? "var(--color-action-text)"
+                                : "var(--color-text-primary)",
+                              border: isUser
+                                ? "none"
+                                : "1px solid var(--color-border-subtle)",
+                              fontFamily: "var(--font-feeling)",
+                              fontSize: "var(--text-body-size)",
+                              lineHeight: "var(--text-body-line)",
+                            }}
+                          >
+                            {isUser ? m.content : parsed?.body}
+                          </div>
+                        )}
                       </div>
                     </li>
                   );
@@ -281,7 +384,7 @@ export default function ChatPage() {
                     handleSend();
                   }
                 }}
-                placeholder={sending ? "응답 생성 중..." : "한 줄 적어도 충분해요"}
+                placeholder={sending ? "응답 생성 중..." : "마감·폴더·완료 — 다 채팅으로 말해요"}
                 disabled={sending || sessionId === null}
                 className="flex-1 px-4 py-2.5 text-[14px] rounded-xl outline-none"
                 style={{
@@ -301,6 +404,64 @@ export default function ChatPage() {
             </div>
           </div>
         </section>
+
+        {/* Sprint 15: 우측 사이드 — 오픈 task 요약 (md 이상) */}
+        <aside
+          className="w-[240px] flex-shrink-0 overflow-y-auto py-4 px-3 hidden md:block"
+          style={{ backgroundColor: "var(--color-bg-base)" }}
+        >
+          <p
+            className="text-[11px] uppercase tracking-widest mb-2"
+            style={{ color: "var(--color-text-secondary)" }}
+          >
+            진행 중
+          </p>
+          {taskSummary.length === 0 ? (
+            <p className="text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
+              아직 등록된 작업이 없어요. 채팅에 마감을 말해봐요.
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {taskSummary.slice(0, 8).map((t) => {
+                const dl = daysUntilLabel(t.deadline_at);
+                return (
+                  <li
+                    key={t.id}
+                    className="rounded-lg px-3 py-2 text-[12px]"
+                    style={{
+                      backgroundColor: "var(--color-bg-card)",
+                      border: "1px solid var(--color-border-subtle)",
+                    }}
+                  >
+                    <div className="font-medium" style={{ color: "var(--color-text-primary)" }}>
+                      {t.title}
+                    </div>
+                    <div className="mt-0.5" style={{ color: "var(--color-text-secondary)" }}>
+                      {dl}
+                      {t.folder_path && <span className="ml-1">· 📁</span>}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <div className="mt-4 flex flex-col gap-1.5">
+            <a
+              href="/tasks"
+              className="text-[11px] underline-offset-2 hover:underline"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              작업 전체 →
+            </a>
+            <a
+              href="/calendar"
+              className="text-[11px] underline-offset-2 hover:underline"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              캘린더 보기 →
+            </a>
+          </div>
+        </aside>
       </div>
     </main>
   );

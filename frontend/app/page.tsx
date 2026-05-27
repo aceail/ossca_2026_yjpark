@@ -10,7 +10,8 @@ export default function Welcome() {
   useEffect(() => {
     const userId = localStorage.getItem("user_id");
     if (userId) {
-      router.replace("/scenario");
+      // Sprint 15: 메인은 chat. one-shot 카드 페이지(/scenario)는 보조.
+      router.replace("/chat");
     } else {
       setChecking(false);
     }
