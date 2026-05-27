@@ -24,6 +24,31 @@ interface UserProfile {
   forbidden_topics?: string[];
 }
 
+// P0-15: 외부 도구 동의
+interface ConsentItem {
+  tool_id: number;
+  tool_name: string;
+  tool_type: string;
+  granted_at: string | null;
+  revoked_at: string | null;
+  active: boolean;
+}
+
+const TOOL_LABELS: Record<string, { label: string; hint: string }> = {
+  "google_calendar.list_events": {
+    label: "Google Calendar — 다가올 일정 조회",
+    hint: "마감·일정 키워드 감지 시 다가올 7일 일정을 참고합니다.",
+  },
+  "local_files.recent": {
+    label: "로컬 파일 — 최근 수정 목록",
+    hint: "문서·발표·논문 키워드 감지 시 최근 파일 목록을 참고합니다.",
+  },
+  "web_search.brave": {
+    label: "웹 검색 — Brave / SearXNG",
+    hint: "참고·예시·검색 키워드 감지 시 웹 검색 결과를 참고합니다.",
+  },
+};
+
 interface Toast {
   id: number;
   message: string;
@@ -69,6 +94,9 @@ export default function SettingsPage() {
   const [forbiddenTopics, setForbiddenTopics] = useState<string[]>([]);
   const [topicInput, setTopicInput] = useState("");
   const [savingTopics, setSavingTopics] = useState(false);
+
+  const [consents, setConsents] = useState<ConsentItem[]>([]);
+  const [togglingTool, setTogglingTool] = useState<number | null>(null);
 
   const [toasts, setToasts] = useState<Toast[]>([]);
 
@@ -121,12 +149,45 @@ export default function SettingsPage() {
     }
   }, []);
 
+  const fetchConsents = useCallback(async (uid: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/users/${uid}/agent-consents`, {
+        headers: { ...authHeaders() },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setConsents(data.consents ?? []);
+    } catch {
+      // silent
+    }
+  }, []);
+
   useEffect(() => {
     if (userId) {
       fetchProfile(userId);
       fetchSafetyTrend(userId);
+      fetchConsents(userId);
     }
-  }, [userId, fetchProfile, fetchSafetyTrend]);
+  }, [userId, fetchProfile, fetchSafetyTrend, fetchConsents]);
+
+  const toggleConsent = async (item: ConsentItem) => {
+    if (!userId) return;
+    setTogglingTool(item.tool_id);
+    try {
+      const method = item.active ? "DELETE" : "POST";
+      const res = await fetch(
+        `${API_BASE}/api/users/${userId}/agent-consents/${item.tool_id}`,
+        { method, headers: { ...authHeaders() } },
+      );
+      if (!res.ok) throw new Error("toggle failed");
+      await fetchConsents(userId);
+      showToast(item.active ? "동의를 철회했어요" : "✓ 동의했어요");
+    } catch {
+      showToast("변경 중 오류가 발생했어요");
+    } finally {
+      setTogglingTool(null);
+    }
+  };
 
   const handleRefreshSnapshot = async () => {
     if (!userId) return;
@@ -342,6 +403,62 @@ export default function SettingsPage() {
           <Button variant="ghost" size="sm" onClick={saveTopics} disabled={savingTopics}>
             {savingTopics ? "저장 중..." : "저장"}
           </Button>
+        </section>
+
+        {/* 섹션 2.5: 외부 도구 동의 (P0-15) */}
+        <section>
+          <h2 className="text-[14px] font-semibold mb-1" style={{ fontFamily: "var(--font-feeling)" }}>
+            외부 도구 연결 동의
+          </h2>
+          <p className="text-[12px] mb-3" style={{ color: "var(--color-text-secondary)" }}>
+            동의한 도구만 시나리오 생성 시 참고됩니다. 기본은 모두 미동의.
+          </p>
+          {consents.length === 0 ? (
+            <p className="text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
+              불러오는 중...
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {consents.map((item) => {
+                const meta = TOOL_LABELS[item.tool_name] ?? {
+                  label: item.tool_name,
+                  hint: "",
+                };
+                return (
+                  <div
+                    key={item.tool_id}
+                    className="flex items-start justify-between gap-3 px-4 py-3 rounded-xl"
+                    style={{
+                      backgroundColor: "var(--color-bg-card)",
+                      border: "1px solid var(--color-border-subtle)",
+                    }}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-medium">{meta.label}</p>
+                      {meta.hint && (
+                        <p className="text-[11px] mt-0.5" style={{ color: "var(--color-text-secondary)" }}>
+                          {meta.hint}
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      variant={item.active ? "ghost" : "primary"}
+                      size="sm"
+                      onClick={() => toggleConsent(item)}
+                      disabled={togglingTool === item.tool_id}
+                      aria-pressed={item.active}
+                    >
+                      {togglingTool === item.tool_id
+                        ? "..."
+                        : item.active
+                          ? "✓ 동의함"
+                          : "동의하기"}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         {/* 섹션 3: Safety 트렌드 */}

@@ -51,6 +51,9 @@ app.dependency_overrides[get_db] = _get_test_db
 
 
 def setUpModule():
+    # 다른 테스트 모듈과 backend.main.app 공유 — override를 자기 DB로 재설정.
+    os.environ["TOMORROW_YOU_DB"] = _TMP_DB_PATH
+    app.dependency_overrides[get_db] = _get_test_db
     conn = open_db(_TMP_DB_PATH)
     migrate(conn)
     seed_builtin_prompts(conn)

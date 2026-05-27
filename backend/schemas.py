@@ -216,3 +216,25 @@ class ToneFeedbackResponse(BaseModel):
     card_id: int
     kind: str
     recorded: bool
+
+
+# ── Agent Tool Consent (P0-15) ────────────────────────────────────────
+
+class ConsentItem(BaseModel):
+    tool_id: int
+    tool_name: str
+    tool_type: str
+    granted_at: Optional[str] = None
+    revoked_at: Optional[str] = None
+    active: bool
+
+
+class ConsentListResponse(BaseModel):
+    user_id: str
+    consents: list[ConsentItem]
+
+
+class ConsentActionResponse(BaseModel):
+    user_id: str
+    tool_id: int
+    active: bool

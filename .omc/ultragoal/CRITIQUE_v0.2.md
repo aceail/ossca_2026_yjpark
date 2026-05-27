@@ -105,10 +105,15 @@ v0.2를 "출시"라 부른 건 잘못된 표현 — 현재는 **v0.2 prototype +
 - [x] 모든 사용자별 endpoint에 적용 (users·personas·safety·sessions·regret·tone_feedback·onboarding). `/api/personas/previews`만 public.
 - [x] frontend `lib/auth.ts` (`getToken`/`setToken`/`authHeaders`) + `lib/api.ts` wrapper + `useUser` hook + `personas`/`settings` 직접 fetch 호출 모두 헤더 자동 첨부.
 
+### v0.3 sprint 8 (closed 2026-05-27)
+**Agent tool consent gate**:
+- [x] P0-15 마이그레이션 010 — `UserAgentToolConsent(user_id, tool_id, granted_at, revoked_at, UNIQUE)`. `agent/consent.py` (`grant_consent`/`revoke_consent`/`has_consent`/`list_consents`). `ToolRouter.route(user_id=...)`에 consent 게이트 통합 — 동의 없는 tool은 결과에서 제외 (기본 미동의).
+- [x] 신규 API — `GET/POST/DELETE /api/users/{user_id}/agent-consents[/{tool_id}]` (require_token 적용).
+- [x] frontend settings에 "외부 도구 연결 동의" 섹션 — calendar/files/search 각 도구별 토글, hint 텍스트 동봉.
+
 ### v0.3 본격 (다음 라운드)
 **Complex**:
 - P0-10 평가 baseline 재정의 (3중 진실원 통합, repair loop 추가)
-- P0-15 agent tool 활성화 사용자 명시 동의 게이트
 - P0-16 작업 큐 + idempotency
 
 ## 5. OSSCA 멘토 제출 전 필수 게이트

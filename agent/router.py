@@ -6,6 +6,10 @@
   - "참고" / "예시" / "검색" / "찾아봐" / "알아봐" → web_search
 
 각 tool 호출은 timeout 3초. 실패해도 시나리오 카드 생성 계속.
+
+P0-15: route()에 user_id가 주어지면 UserAgentToolConsent를 확인하여 동의가
+없는 tool은 결과에서 제외. user_id가 None이면 consent 검사를 건너뛴다
+(테스트·내부 호출 호환). 운영 경로는 항상 user_id를 넘겨야 한다.
 """
 
 from __future__ import annotations
@@ -13,6 +17,8 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass, field
 from typing import Optional
+
+from .consent import has_consent
 
 
 @dataclass
@@ -71,8 +77,12 @@ class ToolRouter:
         input_context: str,
         user_profile: Optional[dict] = None,
         active_persona_id: Optional[int] = None,
+        user_id: Optional[str] = None,
     ) -> list[AgentTool]:
-        """입력 키워드 분석 후 활성화된 tool만 반환 (중복 제거, 우선순위 순)."""
+        """입력 키워드 분석 후 활성화된 tool만 반환 (중복 제거, 우선순위 순).
+
+        user_id가 주어지면 UserAgentToolConsent 게이트 통과한 tool만 반환한다.
+        """
         if not input_context or not input_context.strip():
             return []
 
@@ -95,6 +105,9 @@ class ToolRouter:
                 (db_name,),
             ).fetchone()
             if row is None:
+                continue
+            # P0-15: consent gate — user_id가 주어졌고 동의 없으면 skip
+            if user_id is not None and not has_consent(self._conn, user_id, row["id"]):
                 continue
             import json
             config = json.loads(row["config_json"]) if row["config_json"] else {}

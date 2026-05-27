@@ -5,10 +5,15 @@ Tool router, external integrations, 각 tool adapter를 포함.
 """
 from .router import ToolRouter
 from .integrations import save_integration, get_integration, revoke_integration
+from .consent import grant_consent, revoke_consent, has_consent, list_consents
 
 __all__ = [
     "ToolRouter",
     "save_integration",
     "get_integration",
     "revoke_integration",
+    "grant_consent",
+    "revoke_consent",
+    "has_consent",
+    "list_consents",
 ]
