@@ -14,6 +14,7 @@ class CreateUserRequest(BaseModel):
 
 class CreateUserResponse(BaseModel):
     user_id: str
+    device_token: str  # P0-8: 이후 모든 사용자별 API의 Authorization Bearer 토큰
 
 
 class UserProfileResponse(BaseModel):

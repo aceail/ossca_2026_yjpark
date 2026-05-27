@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import secrets
 import sqlite3
 import uuid
 from datetime import datetime, timezone
@@ -14,7 +15,7 @@ from backend.schemas import (
     CreateUserResponse,
     UserProfileResponse,
 )
-from backend.deps import get_db
+from backend.deps import get_db, require_token
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -30,11 +31,12 @@ def create_user(
 ) -> CreateUserResponse:
     """새 User + UserProfile 생성. default persona = '내일의 나'."""
     user_id = str(uuid.uuid4())
+    device_token = secrets.token_urlsafe(32)
     now = _now()
 
     conn.execute(
-        "INSERT INTO User (id, created_at, last_seen_at) VALUES (?, ?, ?)",
-        (user_id, now, now),
+        "INSERT INTO User (id, created_at, last_seen_at, device_token) VALUES (?, ?, ?, ?)",
+        (user_id, now, now, device_token),
     )
 
     # default persona (내일의 나) lookup
@@ -52,13 +54,14 @@ def create_user(
     )
     conn.commit()
 
-    return CreateUserResponse(user_id=user_id)
+    return CreateUserResponse(user_id=user_id, device_token=device_token)
 
 
 @router.get("/{user_id}/profile", response_model=UserProfileResponse)
 def get_user_profile(
     user_id: str,
     conn: sqlite3.Connection = Depends(get_db),
+    _auth: str = Depends(require_token),
 ) -> UserProfileResponse:
     """UserProfile + active_persona 정보 join."""
     row = conn.execute(

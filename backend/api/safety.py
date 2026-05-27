@@ -12,7 +12,7 @@ from backend.schemas import (
     SafetySnapshotItem,
     SafetySnapshotRefreshResponse,
 )
-from backend.deps import get_db
+from backend.deps import get_db, require_token
 
 router = APIRouter(tags=["safety"])
 
@@ -21,6 +21,7 @@ router = APIRouter(tags=["safety"])
 def get_safety_trend(
     user_id: str,
     conn: sqlite3.Connection = Depends(get_db),
+    _auth: str = Depends(require_token),
 ) -> SafetyTrendResponse:
     """최근 8주 SafetyHarmTimeSeries 반환."""
     user = conn.execute("SELECT id FROM User WHERE id = ?", (user_id,)).fetchone()
@@ -55,6 +56,7 @@ def get_safety_trend(
 def refresh_safety_snapshot(
     user_id: str,
     conn: sqlite3.Connection = Depends(get_db),
+    _auth: str = Depends(require_token),
 ) -> SafetySnapshotRefreshResponse:
     """build_weekly_snapshot 호출."""
     user = conn.execute("SELECT id FROM User WHERE id = ?", (user_id,)).fetchone()

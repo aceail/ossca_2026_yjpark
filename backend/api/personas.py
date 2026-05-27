@@ -18,7 +18,12 @@ from backend.schemas import (
     SetActivePersonaRequest,
     SetActivePersonaResponse,
 )
-from backend.deps import get_db
+from backend.deps import (
+    assert_user_matches,
+    get_db,
+    require_token,
+    resolve_user_from_token,
+)
 
 router = APIRouter(tags=["personas"])
 
@@ -56,17 +61,21 @@ def _row_to_persona(row) -> PersonaResponse:
 def list_personas(
     user_id: str | None = Query(default=None),
     conn: sqlite3.Connection = Depends(get_db),
+    token_user_id: str = Depends(resolve_user_from_token),
 ) -> list[PersonaResponse]:
-    """5 default 페르소나 + 사용자 커스텀."""
+    """5 default 페르소나 + 사용자 커스텀. user_id가 명시되면 토큰 소유자와 일치해야."""
+    if user_id is not None:
+        assert_user_matches(token_user_id, user_id)
+    target_user_id = user_id or token_user_id
     rows = conn.execute(
         "SELECT * FROM Persona WHERE is_builtin = 1 ORDER BY id"
     ).fetchall()
     result = [_row_to_persona(r) for r in rows]
 
-    if user_id:
+    if target_user_id:
         custom_rows = conn.execute(
             "SELECT * FROM Persona WHERE created_by_user = ? ORDER BY id",
-            (user_id,),
+            (target_user_id,),
         ).fetchall()
         result.extend(_row_to_persona(r) for r in custom_rows)
 
@@ -77,7 +86,9 @@ def list_personas(
 def create_custom_persona(
     body: CreateCustomPersonaRequest,
     conn: sqlite3.Connection = Depends(get_db),
+    token_user_id: str = Depends(resolve_user_from_token),
 ) -> CreateCustomPersonaResponse:
+    assert_user_matches(token_user_id, body.user_id)
     """커스텀 페르소나 생성. audit 통과 후 save_persona."""
     payload = {
         "name": body.name,
@@ -138,6 +149,7 @@ def set_active_persona(
     user_id: str,
     body: SetActivePersonaRequest,
     conn: sqlite3.Connection = Depends(get_db),
+    _auth: str = Depends(require_token),
 ) -> SetActivePersonaResponse:
     """UserProfile.active_persona_id 갱신."""
     # persona 존재 확인

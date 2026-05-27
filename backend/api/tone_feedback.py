@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 
 from backend.schemas import ToneFeedbackRequest, ToneFeedbackResponse
-from backend.deps import get_db
+from backend.deps import get_db, require_token_for_card
 
 router = APIRouter(tags=["tone_feedback"])
 
@@ -32,6 +32,7 @@ def submit_tone_feedback(
     card_id: int,
     body: ToneFeedbackRequest,
     conn: sqlite3.Connection = Depends(get_db),
+    _auth: str = Depends(require_token_for_card),
 ) -> ToneFeedbackResponse:
     """톤 피드백 저장 — EvaluationResult metrics_json에 누적."""
     if body.kind not in VALID_KINDS:

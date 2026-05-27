@@ -15,7 +15,11 @@ from backend.schemas import (
     ReturnIntentRequest,
     ReturnIntentResponse,
 )
-from backend.deps import get_db
+from backend.deps import (
+    get_db,
+    require_token_for_card,
+    require_token_for_session,
+)
 
 router = APIRouter(tags=["regret"])
 
@@ -25,6 +29,7 @@ def submit_regret(
     session_id: int,
     body: RegretRequest,
     conn: sqlite3.Connection = Depends(get_db),
+    _auth: str = Depends(require_token_for_session),
 ) -> RegretResponse:
     """RegretScore INSERT."""
     sess = conn.execute(
@@ -48,6 +53,7 @@ def submit_card_accuracy(
     card_id: int,
     body: CardAccuracyRequest,
     conn: sqlite3.Connection = Depends(get_db),
+    _auth: str = Depends(require_token_for_card),
 ) -> CardAccuracyResponse:
     """카드 정확도 self-rating (1-5)."""
     try:
@@ -62,6 +68,7 @@ def submit_return_intent(
     card_id: int,
     body: ReturnIntentRequest,
     conn: sqlite3.Connection = Depends(get_db),
+    _auth: str = Depends(require_token_for_card),
 ) -> ReturnIntentResponse:
     """다음 사용 의향 1-5."""
     try:

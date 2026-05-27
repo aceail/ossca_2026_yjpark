@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useUser } from "../../lib/hooks/useUser";
 import { Button } from "../../components/Button";
+import { authHeaders } from "../../lib/auth";
 import type { Persona } from "../../lib/personas";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8001";
@@ -81,14 +82,18 @@ export default function SettingsPage() {
 
   const fetchProfile = useCallback(async (uid: string) => {
     try {
-      const res = await fetch(`${API_BASE}/api/users/${uid}/profile`);
+      const res = await fetch(`${API_BASE}/api/users/${uid}/profile`, {
+        headers: { ...authHeaders() },
+      });
       if (!res.ok) return;
       const data: UserProfile = await res.json();
       setProfile(data);
       setForbiddenTopics(data.forbidden_topics ?? []);
 
       if (data.active_persona_id) {
-        const pRes = await fetch(`${API_BASE}/api/personas?user_id=${uid}`);
+        const pRes = await fetch(`${API_BASE}/api/personas?user_id=${uid}`, {
+          headers: { ...authHeaders() },
+        });
         if (pRes.ok) {
           const personas: Persona[] = await pRes.json();
           const found = personas.find((p) => p.id === data.active_persona_id) ?? null;
@@ -103,7 +108,9 @@ export default function SettingsPage() {
   const fetchSafetyTrend = useCallback(async (uid: string) => {
     setLoadingTrend(true);
     try {
-      const res = await fetch(`${API_BASE}/api/users/${uid}/safety-trend`);
+      const res = await fetch(`${API_BASE}/api/users/${uid}/safety-trend`, {
+        headers: { ...authHeaders() },
+      });
       if (!res.ok) return;
       const data: SafetyWeek[] = await res.json();
       setSafetyTrend(data);
@@ -127,7 +134,7 @@ export default function SettingsPage() {
     try {
       await fetch(`${API_BASE}/api/users/${userId}/safety-snapshot/refresh`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
       });
       await fetchSafetyTrend(userId);
       showToast("이번 주 데이터를 다시 계산했어요");
@@ -160,7 +167,7 @@ export default function SettingsPage() {
       // forbidden_topics 갱신 — onboarding endpoint 재활용
       const res = await fetch(`${API_BASE}/api/onboarding`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ user_id: userId, forbidden_topics: forbiddenTopics }),
       });
       if (!res.ok) throw new Error("저장 실패");

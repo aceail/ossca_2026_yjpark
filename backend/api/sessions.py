@@ -18,7 +18,12 @@ from backend.schemas import (
     DecisionRequest,
     DecisionResponse,
 )
-from backend.deps import get_db
+from backend.deps import (
+    assert_user_matches,
+    get_db,
+    require_token_for_session,
+    resolve_user_from_token,
+)
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -31,8 +36,10 @@ def _get_orchestrator(conn: sqlite3.Connection) -> SessionOrchestrator:
 def create_session(
     body: CreateSessionRequest,
     conn: sqlite3.Connection = Depends(get_db),
+    token_user_id: str = Depends(resolve_user_from_token),
 ) -> CreateSessionResponse:
     """SessionOrchestrator.start_session → session_id 반환."""
+    assert_user_matches(token_user_id, body.user_id)
     # user 존재 확인
     user = conn.execute("SELECT id FROM User WHERE id = ?", (body.user_id,)).fetchone()
     if not user:
@@ -51,6 +58,7 @@ def create_session(
 def get_probe(
     session_id: int,
     conn: sqlite3.Connection = Depends(get_db),
+    _auth: str = Depends(require_token_for_session),
 ) -> ProbeQuestionResponse:
     """orchestrator.maybe_probe → 질문 또는 null."""
     sess = conn.execute(
@@ -75,6 +83,7 @@ def submit_probe_answer(
     session_id: int,
     body: ProbeAnswerRequest,
     conn: sqlite3.Connection = Depends(get_db),
+    _auth: str = Depends(require_token_for_session),
 ) -> ProbeAnswerResponse:
     """record_probe_answer 또는 skip_today."""
     sess = conn.execute(
@@ -111,6 +120,7 @@ def submit_probe_answer(
 def generate_scenario(
     session_id: int,
     conn: sqlite3.Connection = Depends(get_db),
+    _auth: str = Depends(require_token_for_session),
 ) -> ScenarioCardResponse:
     """orchestrator.generate_scenario → ScenarioCard. Ollama timeout 60s."""
     sess = conn.execute(
@@ -197,6 +207,7 @@ def record_decision(
     session_id: int,
     body: DecisionRequest,
     conn: sqlite3.Connection = Depends(get_db),
+    _auth: str = Depends(require_token_for_session),
 ) -> DecisionResponse:
     """결정 기록. 'delete'면 cascade 삭제."""
     sess = conn.execute(
@@ -224,6 +235,7 @@ def record_decision(
 def delete_session(
     session_id: int,
     conn: sqlite3.Connection = Depends(get_db),
+    _auth: str = Depends(require_token_for_session),
 ) -> DecisionResponse:
     """Self-Destruct cascade — AvoidanceSession + ScenarioCard + ToolInvocation 삭제."""
     sess = conn.execute(

@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useUser } from "../../lib/hooks/useUser";
 import { PersonaCard } from "../../components/PersonaCard";
 import { Button } from "../../components/Button";
+import { authHeaders } from "../../lib/auth";
 import type { Persona } from "../../lib/personas";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8001";
@@ -92,7 +93,9 @@ export default function PersonasPage() {
   const fetchPersonas = useCallback(async (uid: string) => {
     setLoadingPersonas(true);
     try {
-      const res = await fetch(`${API_BASE}/api/personas?user_id=${uid}`);
+      const res = await fetch(`${API_BASE}/api/personas?user_id=${uid}`, {
+        headers: { ...authHeaders() },
+      });
       if (!res.ok) throw new Error("페르소나 목록 로드 실패");
       const data = await res.json();
       setPersonas(data);
@@ -105,7 +108,9 @@ export default function PersonasPage() {
 
   const fetchProfile = useCallback(async (uid: string) => {
     try {
-      const res = await fetch(`${API_BASE}/api/users/${uid}/profile`);
+      const res = await fetch(`${API_BASE}/api/users/${uid}/profile`, {
+        headers: { ...authHeaders() },
+      });
       if (!res.ok) return;
       const data = await res.json();
       if (data.active_persona_id) setActivePersonaId(data.active_persona_id);
@@ -130,7 +135,7 @@ export default function PersonasPage() {
     try {
       const res = await fetch(`${API_BASE}/api/users/${userId}/active-persona`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ persona_id: persona.id }),
       });
       if (!res.ok) throw new Error("활성화 실패");
@@ -178,7 +183,7 @@ export default function PersonasPage() {
     try {
       const res = await fetch(`${API_BASE}/api/personas/custom`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ user_id: userId, ...payload }),
       });
       if (res.ok) {

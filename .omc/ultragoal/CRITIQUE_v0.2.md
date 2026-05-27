@@ -99,9 +99,14 @@ v0.2를 "출시"라 부른 건 잘못된 표현 — 현재는 **v0.2 prototype +
 **PromptVersion runtime linkage**:
 - [x] P0-12 마이그레이션 008 — `ToolInvocation.prompt_version_id` FK 추가 + index. 새 helper `db.upsert_prompt_version(name, system_prompt)` — version=SHA256(prompt)[:12]로 결정적 idempotent. orchestrator는 LLM 호출 직전 prompt_version_id를 산출해 `ScenarioCard` dataclass와 `ToolInvocation` 행에 모두 기록. elevated 신호로 prefix가 들어가면 자동으로 새 version이 생성돼 평가·재현 시 정확한 system_prompt 복원이 가능.
 
+### v0.3 sprint 7 (closed 2026-05-27)
+**Device token auth**:
+- [x] P0-8 마이그레이션 009 — `User.device_token` (UNIQUE WHERE NOT NULL). `/api/users` POST 응답에 `secrets.token_urlsafe(32)` 토큰 포함. `backend.deps`에 4종 검증 dep — `require_token` (path user_id), `require_token_for_session` (session_id→user 트랜지티브), `require_token_for_card` (card→session→user), `resolve_user_from_token` (body/query). 미스매치 401, body user_id 불일치 403.
+- [x] 모든 사용자별 endpoint에 적용 (users·personas·safety·sessions·regret·tone_feedback·onboarding). `/api/personas/previews`만 public.
+- [x] frontend `lib/auth.ts` (`getToken`/`setToken`/`authHeaders`) + `lib/api.ts` wrapper + `useUser` hook + `personas`/`settings` 직접 fetch 호출 모두 헤더 자동 첨부.
+
 ### v0.3 본격 (다음 라운드)
 **Complex**:
-- P0-8 API 인증 (간단 디바이스 토큰 + Authorization 헤더)
 - P0-10 평가 baseline 재정의 (3중 진실원 통합, repair loop 추가)
 - P0-15 agent tool 활성화 사용자 명시 동의 게이트
 - P0-16 작업 큐 + idempotency

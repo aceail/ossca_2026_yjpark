@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 
 from backend.schemas import OnboardingRequest, OnboardingResponse
-from backend.deps import get_db
+from backend.deps import assert_user_matches, get_db, resolve_user_from_token
 
 router = APIRouter(tags=["onboarding"])
 
@@ -43,8 +43,10 @@ def _calc_completion(slots: dict) -> float:
 def submit_onboarding(
     body: OnboardingRequest,
     conn: sqlite3.Connection = Depends(get_db),
+    token_user_id: str = Depends(resolve_user_from_token),
 ) -> OnboardingResponse:
     """UserProfile.slots_json 갱신 + completion_percent 계산."""
+    assert_user_matches(token_user_id, body.user_id)
     profile = conn.execute(
         "SELECT slots_json, forbidden_topics_json FROM UserProfile WHERE user_id = ?",
         (body.user_id,),

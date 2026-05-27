@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { setToken } from "../auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8001";
 
 interface User {
   user_id: string;
+  device_token: string;  // P0-8
 }
 
 interface UseUserResult {
@@ -14,7 +16,7 @@ interface UseUserResult {
   error: string | null;
 }
 
-async function createUser(): Promise<string> {
+async function createUser(): Promise<User> {
   const response = await fetch(`${API_BASE}/api/users`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -24,8 +26,7 @@ async function createUser(): Promise<string> {
     throw new Error(`사용자 생성 실패: ${response.status}`);
   }
 
-  const data: User = await response.json();
-  return data.user_id;
+  return (await response.json()) as User;
 }
 
 export function useUser(): UseUserResult {
@@ -43,9 +44,10 @@ export function useUser(): UseUserResult {
     }
 
     createUser()
-      .then((id) => {
-        localStorage.setItem("user_id", id);
-        setUserId(id);
+      .then(({ user_id, device_token }) => {
+        localStorage.setItem("user_id", user_id);
+        setToken(device_token);
+        setUserId(user_id);
       })
       .catch(() => {
         // 백엔드 미가용 시 graceful fallback: 임시 로컬 ID 사용
