@@ -55,6 +55,8 @@ services:
       NAEIL_VAPID_SUBJECT: ${NAEIL_VAPID_SUBJECT:-mailto:admin@example.com}
       TOMORROW_YOU_FERNET_PASSPHRASE: ${TOMORROW_YOU_FERNET_PASSPHRASE:-}
       OLLAMA_HOST: http://ollama:11434
+      # 작업물 follow-up: host의 폴더를 backend가 동일 경로로 볼 수 있게.
+      HOST_HOME: ${HOME}
       # Sprint 27: tracing
       TOMORROW_YOU_TRACING_ENABLED: ${TOMORROW_YOU_TRACING_ENABLED:-true}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://phoenix:6006/v1/traces
@@ -62,6 +64,9 @@ services:
       TOMORROW_YOU_ENV: ${TOMORROW_YOU_ENV:-dev}
     volumes:
       - naeil_data:/data
+      # Host home read-only so user-typed paths (~/Desktop/work) resolve to
+      # the same absolute path inside the container via HOST_HOME env var.
+      - ${HOME}:${HOME}:ro
     ports:
       # Host port overridable for environments where :8001 is taken (env: TOMORROW_YOU_BACKEND_PORT).
       - "${TOMORROW_YOU_BACKEND_PORT:-8001}:8001"

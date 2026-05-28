@@ -75,10 +75,12 @@ ACTION_SYSTEM_SUFFIX = """
 가능한 action types:
 
 1. create_task — 새 작업 등록 ("5월 31일까지 발표자료 만들어야해"):
-   {"type":"create_task","title":"발표자료","deadline":"2026-05-31","folder":"/optional/path"}
+   {"type":"create_task","title":"발표자료","deadline":"2026-05-31"}
+   ↑ folder는 사용자가 명시했을 때만 추가. 명시 안 했으면 folder 키 자체를 넣지 마.
 
 2. set_folder — 기존 작업의 폴더 등록 ("발표자료 폴더는 ~/Desktop/work야"):
-   {"type":"set_folder","task":"발표자료","folder":"/Users/yj/Desktop/work"}
+   {"type":"set_folder","task":"발표자료","folder":"<사용자가 말한 경로 그대로>"}
+   ↑ folder 값에 위의 예시(/Users/yj/...)나 placeholder를 절대 넣지 마. 사용자가 발화한 경로 문자열을 토씨 하나 안 바꾸고 복사. 사용자가 "~/foo"라 했으면 "~/foo", "/home/x/bar"라 했으면 "/home/x/bar" 그대로.
 
 3. update_status — 완료·중단 ("발표자료 다 했어", "발표자료 그만둘래"):
    {"type":"update_status","task":"발표자료","status":"done"}   ← done | abandoned | open
