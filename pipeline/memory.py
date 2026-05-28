@@ -77,6 +77,7 @@ def recall(
     return [dict(r) for r in rows]
 
 
+@trace_subsystem("memory")
 def forget(
     conn: sqlite3.Connection, user_id: str, *, key: str,
 ) -> bool:
