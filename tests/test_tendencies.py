@@ -183,5 +183,55 @@ class TestThenProgressRatio(unittest.TestCase):
         self.assertIsNone(out["gentle_then_progress_ratio"])
 
 
+class TestGrowthPattern(unittest.TestCase):
+    def _setup(self, pattern: str):
+        conn = _fresh_conn()
+        _insert_user(conn, "u-grow")
+        now = datetime(2026, 5, 28, tzinfo=timezone.utc)
+        deadline = (now + timedelta(days=10)).isoformat()
+        conn.execute(
+            "INSERT INTO Task (id, user_id, title, deadline_at, status, "
+            "created_at, updated_at) VALUES (200, 'u-grow', 't', ?, 'open', ?, ?)",
+            (deadline, (now - timedelta(days=30)).isoformat(), now.isoformat()),
+        )
+        # 5 snapshots over 30 days. file_count series:
+        # 'late_spike': 0,0,0,1,8
+        # 'steady':     1,3,5,7,9
+        # 'flat':       1,1,1,1,1
+        series = {
+            "late_spike": [0, 0, 0, 1, 8],
+            "steady": [1, 3, 5, 7, 9],
+            "flat": [1, 1, 1, 1, 1],
+        }[pattern]
+        for i, fc in enumerate(series):
+            t = (now - timedelta(days=30 - i * 6)).isoformat()
+            conn.execute(
+                "INSERT INTO FolderSnapshot (task_id, taken_at, file_count, "
+                "total_bytes, newest_mtime, files_json) "
+                "VALUES (200, ?, ?, ?, ?, '[]')",
+                (t, fc, fc * 100, t),
+            )
+        conn.commit()
+        return conn, now
+
+    def test_late_spike_classification(self):
+        from pipeline.tendencies import extract_features
+        conn, now = self._setup("late_spike")
+        out = extract_features(conn, "u-grow", now=now)
+        self.assertEqual(out["snapshot_growth_pattern"], "late_spike")
+
+    def test_steady_classification(self):
+        from pipeline.tendencies import extract_features
+        conn, now = self._setup("steady")
+        out = extract_features(conn, "u-grow", now=now)
+        self.assertEqual(out["snapshot_growth_pattern"], "steady")
+
+    def test_flat_classification(self):
+        from pipeline.tendencies import extract_features
+        conn, now = self._setup("flat")
+        out = extract_features(conn, "u-grow", now=now)
+        self.assertEqual(out["snapshot_growth_pattern"], "flat")
+
+
 if __name__ == "__main__":
     unittest.main()

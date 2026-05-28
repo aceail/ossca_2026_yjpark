@@ -151,6 +151,61 @@ def _extract_then_progress_ratios(
     return (ratio, ratio)
 
 
+def _classify_growth_series(file_counts: list[int]) -> str:
+    """Classify a chronologically-ordered file_count series into
+    'late_spike', 'steady', or 'flat'.
+
+    'flat'       — last count <= 1.05 * first count
+    'late_spike' — >60% of total growth occurred in the last 20% of points
+    'steady'     — otherwise
+    """
+    import math
+
+    if len(file_counts) < 2:
+        return "flat"
+    first, last = file_counts[0], file_counts[-1]
+    total_growth = last - first
+    if total_growth <= max(1, int(first * 0.05)):
+        return "flat"
+    n = len(file_counts)
+    tail_len = max(1, math.ceil(n * 0.2))
+    tail_start_idx = n - tail_len
+    # Growth in the tail = last value - value before tail starts
+    before_tail_val = file_counts[tail_start_idx - 1] if tail_start_idx > 0 else first
+    tail_growth = file_counts[-1] - before_tail_val
+    if tail_growth >= 0.6 * total_growth:
+        return "late_spike"
+    return "steady"
+
+
+def _extract_snapshot_growth_pattern(
+    conn: sqlite3.Connection, user_id: str, now: datetime
+) -> Optional[str]:
+    """Aggregate per-task growth pattern by majority vote across the
+    user's open tasks (last 30 days)."""
+    cutoff = (now - timedelta(days=30)).isoformat()
+    tasks = conn.execute(
+        "SELECT id FROM Task WHERE user_id = ?", (user_id,),
+    ).fetchall()
+    votes: dict[str, int] = {"late_spike": 0, "steady": 0, "flat": 0}
+    counted = 0
+    for t in tasks:
+        rows = conn.execute(
+            """SELECT file_count FROM FolderSnapshot
+               WHERE task_id = ? AND taken_at >= ?
+               ORDER BY taken_at ASC""",
+            (t["id"], cutoff),
+        ).fetchall()
+        series = [r["file_count"] for r in rows]
+        if not series:
+            continue
+        votes[_classify_growth_series(series)] += 1
+        counted += 1
+    if counted == 0:
+        return None
+    return max(votes.items(), key=lambda kv: kv[1])[0]
+
+
 @trace_subsystem("tendencies")
 def extract_features(
     conn: sqlite3.Connection,
@@ -175,5 +230,7 @@ def extract_features(
         "peak_hour_histogram": _extract_peak_hour_histogram(conn, user_id, _now),
         "sharp_then_progress_ratio": sharp_ratio,
         "gentle_then_progress_ratio": gentle_ratio,
-        "snapshot_growth_pattern": None,
+        "snapshot_growth_pattern": _extract_snapshot_growth_pattern(
+            conn, user_id, _now
+        ),
     }
