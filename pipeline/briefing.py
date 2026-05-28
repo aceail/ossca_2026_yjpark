@@ -14,6 +14,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 
+from agent.tracing import trace_subsystem
 from pipeline.memory import upsert_memory
 
 LAST_KEY = "_last_briefing_at"
@@ -129,6 +130,7 @@ def build_briefing_prompt(data: dict) -> str:
 LLMCallFn = Callable[[list[dict]], dict]
 
 
+@trace_subsystem("briefing")
 def generate_briefing(
     conn: sqlite3.Connection,
     user_id: str,

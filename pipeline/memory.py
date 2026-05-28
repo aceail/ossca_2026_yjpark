@@ -8,11 +8,14 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime, timezone
 
+from agent.tracing import trace_subsystem
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+@trace_subsystem("memory")
 def upsert_memory(
     conn: sqlite3.Connection,
     *,
@@ -45,6 +48,7 @@ def upsert_memory(
     return cur.lastrowid
 
 
+@trace_subsystem("memory")
 def top_memories(
     conn: sqlite3.Connection, user_id: str, *, limit: int = 5,
 ) -> list[dict]:
@@ -57,6 +61,7 @@ def top_memories(
     return [dict(r) for r in rows]
 
 
+@trace_subsystem("memory")
 def recall(
     conn: sqlite3.Connection, user_id: str, *, query: str, limit: int = 5,
 ) -> list[dict]:
@@ -72,6 +77,7 @@ def recall(
     return [dict(r) for r in rows]
 
 
+@trace_subsystem("memory")
 def forget(
     conn: sqlite3.Connection, user_id: str, *, key: str,
 ) -> bool:

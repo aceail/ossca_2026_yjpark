@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
+from agent.tracing import trace_tool
+
 ToolExecutor = Callable[..., dict]
 
 
@@ -388,6 +390,7 @@ def tool_schemas_for_ollama() -> list[dict]:
     ]
 
 
+@trace_tool
 def dispatch(
     conn: sqlite3.Connection,
     *,

@@ -21,6 +21,7 @@ from persona import seed_builtin_prompts
 from pipeline.folder_watch import scan_open_tasks
 from pipeline.followup import dispatch_due_followups
 from backend.deps import DB_PATH
+from agent.tracing import init_tracing
 from backend.api import users, personas, onboarding, sessions, regret, safety, tone_feedback, consent, chat, tasks, calendar as calendar_api, push_api
 
 
@@ -82,6 +83,20 @@ async def lifespan(app: FastAPI):
     migrate(conn)
     seed_builtin_prompts(conn)
     conn.close()
+
+    # Sprint 27: tracing — boot once before any task spawns.
+    try:
+        init_tracing()
+    except Exception:
+        # Defensive: tracing init failures must not block app startup.
+        pass
+
+    # FastAPI auto-instrumentation (registers middleware on the existing app).
+    try:
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+        FastAPIInstrumentor.instrument_app(app)
+    except Exception:
+        pass
 
     watch_task = None
     followup_task = None

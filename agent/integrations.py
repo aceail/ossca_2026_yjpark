@@ -24,6 +24,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from agent.tracing import trace_subsystem
+
 
 # ────────────────────────────────────────────────────────────────────
 # 암호화 백엔드 초기화
@@ -112,6 +114,7 @@ def _decrypt(ciphertext: bytes) -> str:
 # ExternalIntegration CRUD
 # ────────────────────────────────────────────────────────────────────
 
+@trace_subsystem("agent")
 def save_integration(
     conn: sqlite3.Connection,
     user_id: str,
@@ -149,6 +152,7 @@ def save_integration(
     conn.commit()
 
 
+@trace_subsystem("agent")
 def get_integration(
     conn: sqlite3.Connection,
     user_id: str,
@@ -180,6 +184,7 @@ def get_integration(
     }
 
 
+@trace_subsystem("agent")
 def revoke_integration(
     conn: sqlite3.Connection,
     user_id: str,
