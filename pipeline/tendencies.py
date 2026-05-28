@@ -73,6 +73,43 @@ def _extract_peak_hour_histogram(
     return buckets
 
 
+def _extract_avg_deadline_buffer_days(
+    conn: sqlite3.Connection, user_id: str, now: datetime
+) -> Optional[float]:
+    """Mean of (closed_at - last_followup_at) over closed tasks.
+
+    closed_at = updated_at for status in ('done', 'abandoned').
+    Returns None if fewer than 3 closed tasks have a non-null last_followup_at.
+    """
+    rows = conn.execute(
+        """SELECT updated_at, last_followup_at FROM Task
+           WHERE user_id = ? AND status IN ('done', 'abandoned')
+             AND last_followup_at IS NOT NULL""",
+        (user_id,),
+    ).fetchall()
+    if len(rows) < 3:
+        return None
+    diffs: list[float] = []
+    for r in rows:
+        try:
+            closed = datetime.fromisoformat(
+                (r["updated_at"] or "").replace("Z", "+00:00")
+            )
+            fu = datetime.fromisoformat(
+                (r["last_followup_at"] or "").replace("Z", "+00:00")
+            )
+            if closed.tzinfo is None:
+                closed = closed.replace(tzinfo=timezone.utc)
+            if fu.tzinfo is None:
+                fu = fu.replace(tzinfo=timezone.utc)
+            diffs.append((closed - fu).total_seconds() / 86400.0)
+        except (ValueError, TypeError):
+            continue
+    if len(diffs) < 3:
+        return None
+    return sum(diffs) / len(diffs)
+
+
 @trace_subsystem("tendencies")
 def extract_features(
     conn: sqlite3.Connection,
@@ -88,7 +125,9 @@ def extract_features(
     _now = now or datetime.now(timezone.utc)
     return {
         "chat_count_7d": _extract_chat_count_7d(conn, user_id, _now),
-        "avg_deadline_buffer_days": None,
+        "avg_deadline_buffer_days": _extract_avg_deadline_buffer_days(
+            conn, user_id, _now
+        ),
         "peak_hour_histogram": _extract_peak_hour_histogram(conn, user_id, _now),
         "sharp_then_progress_ratio": None,
         "gentle_then_progress_ratio": None,

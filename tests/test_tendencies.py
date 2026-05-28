@@ -55,6 +55,42 @@ class TestExtractFeaturesShape(unittest.TestCase):
             self.assertIn(k, out)
 
 
+class TestDeadlineBuffer(unittest.TestCase):
+    def setUp(self):
+        self.conn = _fresh_conn()
+        _insert_user(self.conn, "u-buf")
+        # 3 closed tasks. last_followup_at vs updated_at gap → buffer.
+        now = datetime(2026, 5, 28, tzinfo=timezone.utc)
+        for i, (status, last_fu_offset, closed_offset) in enumerate([
+            ("done", 5, 1),       # last followup 5d ago, closed 1d ago → buf=4
+            ("done", 7, 5),       # buf=2
+            ("abandoned", 4, 1),  # buf=3
+        ]):
+            last_fu = (now - timedelta(days=last_fu_offset)).isoformat()
+            closed_at = (now - timedelta(days=closed_offset)).isoformat()
+            deadline = (now + timedelta(days=10)).isoformat()
+            self.conn.execute(
+                "INSERT INTO Task (user_id, title, deadline_at, status, "
+                "created_at, updated_at, last_followup_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                ("u-buf", f"t{i}", deadline, status,
+                 last_fu, closed_at, last_fu),
+            )
+        self.conn.commit()
+        self.now = now
+
+    def test_avg_deadline_buffer_days_mean_of_closed_tasks(self):
+        from pipeline.tendencies import extract_features
+        out = extract_features(self.conn, "u-buf", now=self.now)
+        self.assertAlmostEqual(out["avg_deadline_buffer_days"], 3.0, places=1)
+
+    def test_below_three_closed_returns_none(self):
+        from pipeline.tendencies import extract_features
+        _insert_user(self.conn, "u-buf-thin")
+        out = extract_features(self.conn, "u-buf-thin", now=self.now)
+        self.assertIsNone(out["avg_deadline_buffer_days"])
+
+
 class TestChatStatistics(unittest.TestCase):
     def setUp(self):
         self.conn = _fresh_conn()
