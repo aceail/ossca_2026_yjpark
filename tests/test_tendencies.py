@@ -416,5 +416,52 @@ class TestReflectionHook(unittest.TestCase):
         self.assertEqual(tendencies["qualitative"]["tone_preference"], "sharp")
 
 
+class TestFollowupTone(unittest.TestCase):
+    def _base_args(self):
+        return dict(
+            title="t",
+            days_until_deadline=1,
+            last_followup_hours_ago=None,
+            progressed=False,
+            signal_level="normal",
+            persona_tone=None,
+        )
+
+    def test_tone_pref_overrides_default_when_confidence_high(self):
+        from pipeline.followup_tone import decide_followup
+        tendencies = {
+            "qualitative": {"tone_preference": "savage"},
+            "confidence": {"tone_preference": 0.9},
+        }
+        d = decide_followup(adaptive_tendencies=tendencies, **self._base_args())
+        self.assertTrue(d.should_send)
+        self.assertEqual(d.tone, "savage")
+
+    def test_tone_pref_ignored_when_confidence_low(self):
+        from pipeline.followup_tone import decide_followup
+        tendencies = {
+            "qualitative": {"tone_preference": "savage"},
+            "confidence": {"tone_preference": 0.1},
+        }
+        d = decide_followup(adaptive_tendencies=tendencies, **self._base_args())
+        # Falls back to non-savage default for D-1 / not progressed.
+        self.assertNotEqual(d.tone, "savage")
+
+    def test_demotion_when_reaction_to_sharp_shuts_down(self):
+        from pipeline.followup_tone import decide_followup
+        tendencies = {
+            "qualitative": {
+                "tone_preference": "sharp",
+                "reaction_to_sharp": "shuts_down",
+            },
+            "confidence": {
+                "tone_preference": 0.9,
+                "reaction_to_sharp": 0.9,
+            },
+        }
+        d = decide_followup(adaptive_tendencies=tendencies, **self._base_args())
+        self.assertEqual(d.tone, "witty")
+
+
 if __name__ == "__main__":
     unittest.main()
