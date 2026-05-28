@@ -19,6 +19,7 @@ from typing import Callable, Optional
 
 from agent.tracing import trace_subsystem
 from pipeline.memory import top_memories, upsert_memory
+from pipeline import tendencies as _tendencies
 
 LAST_KEY = "_last_reflection_at"
 
@@ -190,6 +191,28 @@ def run_reflection(
         added += 1
     upsert_memory(conn, user_id=user_id, key=LAST_KEY,
                   value=now.isoformat(), source="reflection")
+
+    # Sprint 28: Adaptive Self-Learning Loop — also extract typed tendencies.
+    try:
+        features = _tendencies.extract_features(conn, user_id, now=now)
+        chat_samples = [
+            r["content"] for r in conn.execute(
+                "SELECT m.content FROM ChatMessage m "
+                "JOIN ChatSession s ON s.id = m.chat_session_id "
+                "WHERE s.user_id = ? AND m.role = 'user' "
+                "ORDER BY m.id DESC LIMIT 10",
+                (user_id,),
+            ).fetchall()
+        ]
+        critic_out = _tendencies.llm_critic(
+            features, chat_samples, call_fn=call_fn,
+        )
+        payload = _tendencies.merge(features, critic_out, now=now)
+        _tendencies.save_to_memory(conn, user_id, payload)
+    except Exception:
+        # Never let tendencies break the existing reflection contract.
+        pass
+
     return {"ran": True, "added": added, "evidence": evidence, "memories": new_memos}
 
 

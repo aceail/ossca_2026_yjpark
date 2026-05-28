@@ -371,5 +371,50 @@ class TestMemoryRoundTrip(unittest.TestCase):
         self.assertIsNone(load_from_memory(conn, "u-bad"))
 
 
+class TestReflectionHook(unittest.TestCase):
+    def test_run_reflection_invokes_tendencies(self):
+        """run_reflection should populate UserMemory[adaptive_tendencies]."""
+        from pipeline.reflection import run_reflection
+        from pipeline.tendencies import load_from_memory
+
+        conn = _fresh_conn()
+        _insert_user(conn, "u-ref")
+        # Seed minimal chat + closed task so extract_features has data
+        sess = conn.execute(
+            "INSERT INTO ChatSession (user_id, persona_id, created_at, "
+            "updated_at) VALUES ('u-ref', NULL, ?, ?)",
+            ("2026-05-27T05:00:00Z", "2026-05-27T05:00:00Z"),
+        ).lastrowid
+        conn.execute(
+            "INSERT INTO ChatMessage (chat_session_id, role, content, created_at) "
+            "VALUES (?, 'user', 'hi', ?)",
+            (sess, "2026-05-27T05:00:00Z"),
+        )
+        conn.commit()
+
+        # call_fn: first call is the existing reflection LLM, second is tendencies.
+        # Both should be tolerant of "no actions" / "no qualitative" answers.
+        responses = iter([
+            {"message": {"content": '[]'}},
+            {"message": {"content":
+                '{"tone_preference":"sharp",'
+                '"confidence":{"tone_preference":0.6}}'}},
+        ])
+        def fake_call_fn(messages, **kw):
+            return next(responses)
+
+        result = run_reflection(
+            conn, "u-ref",
+            now=datetime(2026, 5, 28, tzinfo=timezone.utc),
+            call_fn=fake_call_fn,
+        )
+        # The existing reflection result keys are preserved.
+        self.assertIn("ran", result)
+        # And the new tendencies persisted.
+        tendencies = load_from_memory(conn, "u-ref")
+        self.assertIsNotNone(tendencies)
+        self.assertEqual(tendencies["qualitative"]["tone_preference"], "sharp")
+
+
 if __name__ == "__main__":
     unittest.main()
