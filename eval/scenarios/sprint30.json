@@ -1,0 +1,35 @@
+[
+  {
+    "id": "rag-recall-similar-past",
+    "user_input": "예전에 운동 안 한다고 했던 거 기억해?",
+    "expected_actions": [
+      {"type": "tool_call", "tool": "recall_semantic"}
+    ]
+  },
+  {
+    "id": "rag-recall-task-context",
+    "user_input": "비슷한 일 전에도 했었나?",
+    "expected_actions": [
+      {"type": "tool_call", "tool": "recall_semantic"}
+    ]
+  },
+  {
+    "id": "rag-recall-mood",
+    "user_input": "그때 내 기분이 어땠는지 기억나?",
+    "expected_actions": [
+      {"type": "tool_call", "tool": "recall_semantic"}
+    ]
+  },
+  {
+    "id": "rag-no-recall-trivial",
+    "user_input": "오늘 날씨 어때",
+    "expected_actions": []
+  },
+  {
+    "id": "rag-recall-deadline-history",
+    "user_input": "지난번 마감 어떻게 넘겼었지",
+    "expected_actions": [
+      {"type": "tool_call", "tool": "recall_semantic"}
+    ]
+  }
+]
