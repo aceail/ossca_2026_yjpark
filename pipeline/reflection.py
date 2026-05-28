@@ -17,6 +17,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 
+from agent.tracing import trace_subsystem
 from pipeline.memory import top_memories, upsert_memory
 
 LAST_KEY = "_last_reflection_at"
@@ -134,6 +135,7 @@ def parse_reflection_response(raw: str) -> list[dict]:
 LLMCallFn = Callable[[list[dict]], dict]
 
 
+@trace_subsystem("reflection")
 def run_reflection(
     conn: sqlite3.Connection,
     user_id: str,
@@ -191,6 +193,7 @@ def run_reflection(
     return {"ran": True, "added": added, "evidence": evidence, "memories": new_memos}
 
 
+@trace_subsystem("reflection")
 def run_reflection_for_all(
     conn: sqlite3.Connection,
     *,
