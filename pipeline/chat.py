@@ -41,10 +41,16 @@ def _react_round_span(round_index: int):
     except Exception:
         yield None
 
-OLLAMA_CHAT_URL = "http://127.0.0.1:11434/api/chat"
+import os as _os_chat
+# Sprint 23: docker compose sets OLLAMA_HOST=http://ollama:11434 so the backend
+# container can reach the Ollama service container. Bare-metal dev keeps the
+# 127.0.0.1 fallback.
+OLLAMA_CHAT_URL = (
+    _os_chat.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
+    + "/api/chat"
+)
 # Sprint 18: Hermes-style agent model. EXAONE은 tools API 미검증.
 # qwen3:8b가 OSS·tools API 잘 지원하고 7GB로 가벼움. 환경변수로 swap.
-import os as _os_chat
 OLLAMA_MODEL = _os_chat.environ.get("NAEIL_AGENT_MODEL", "qwen3:8b")
 OLLAMA_FALLBACK_MODEL = _os_chat.environ.get("NAEIL_AGENT_FALLBACK", "exaone3.5:7.8b")
 AGENT_MAX_TOOL_ROUNDS = int(_os_chat.environ.get("NAEIL_AGENT_MAX_TOOL_ROUNDS", "4"))
