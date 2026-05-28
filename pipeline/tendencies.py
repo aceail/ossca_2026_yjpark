@@ -297,7 +297,7 @@ def llm_critic(
         call_fn = _call_ollama_chat
     messages = _critic_prompt(features, chat_samples)
     try:
-        result = call_fn(messages, model=None, temperature=0.0, num_predict=400)
+        result = call_fn(messages, temperature=0.0, num_predict=400)
     except Exception:
         return {}
     raw = (result or {}).get("message", {}).get("content", "") or ""

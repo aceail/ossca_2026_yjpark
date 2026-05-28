@@ -280,6 +280,19 @@ class TestLLMCritic(unittest.TestCase):
         self.assertIn("tone_preference", out)
         self.assertNotIn("unknown_dim", out)
 
+    def test_critic_does_not_pass_model_kwarg(self):
+        """Regression: real _call_ollama_chat doesn't accept `model`."""
+        from pipeline.tendencies import llm_critic
+        received_kwargs: dict = {}
+        def capturing_call_fn(messages, **kw):
+            received_kwargs.update(kw)
+            return {"message": {"content": "{}"}}
+        llm_critic({}, [], call_fn=capturing_call_fn)
+        self.assertNotIn("model", received_kwargs)
+        # Sanity: the kwargs we DO send are still there
+        self.assertEqual(received_kwargs["temperature"], 0.0)
+        self.assertEqual(received_kwargs["num_predict"], 400)
+
 
 if __name__ == "__main__":
     unittest.main()
