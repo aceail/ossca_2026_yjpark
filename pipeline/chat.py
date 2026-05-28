@@ -457,6 +457,9 @@ def _call_ollama_chat(
         "model": OLLAMA_MODEL,
         "messages": messages,
         "stream": False,
+        # qwen3 etc. emit chain-of-thought as `content` unless think=false. That
+        # breaks the JSON action format the system prompt asks for. Force off.
+        "think": False,
         "options": {"num_predict": num_predict, "temperature": temperature},
     }
     if tools and AGENT_TOOLS_ENABLED:
