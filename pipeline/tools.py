@@ -191,6 +191,12 @@ def _exec_forget(conn: sqlite3.Connection, user_id: str, **kw) -> dict:
     return {"ok": True, "removed": removed}
 
 
+def _exec_recall_semantic(conn, user_id, *, query: str, k: int = 5) -> dict:
+    from rag.retriever import recall_semantic
+    hits = recall_semantic(conn, user_id=user_id, query=query, k=int(k))
+    return {"ok": True, "hits": hits}
+
+
 def _exec_search_memory(conn: sqlite3.Connection, user_id: str, **kw) -> dict:
     """Sprint 19: FTS5로 사용자 과거 chat 메시지 검색.
 
@@ -371,6 +377,22 @@ REGISTRY: dict[str, Tool] = {
             "required": ["key"],
         },
         executor=_exec_forget,
+    ),
+    "recall_semantic": Tool(
+        name="recall_semantic",
+        description=(
+            "의미 기반으로 과거 대화/기억에서 관련 항목을 검색합니다. "
+            "사용자가 '예전에 ~했던 거', '비슷한 상황' 같은 회상을 요구할 때 사용."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "검색 질의문"},
+                "k": {"type": "integer", "description": "결과 개수 (기본 5)"},
+            },
+            "required": ["query"],
+        },
+        executor=_exec_recall_semantic,
     ),
 }
 
