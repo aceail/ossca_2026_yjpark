@@ -110,6 +110,47 @@ def _extract_avg_deadline_buffer_days(
     return sum(diffs) / len(diffs)
 
 
+def _extract_then_progress_ratios(
+    conn: sqlite3.Connection, user_id: str, now: datetime
+) -> tuple[Optional[float], Optional[float]]:
+    """For each task with last_followup_at set, compare the latest
+    snapshot file_count to the one immediately before last_followup_at.
+    Ratio = (followups followed by growth) / (followups with sufficient data).
+    Tone-per-followup is not recorded yet so both 'sharp' and 'gentle'
+    keys get the same ratio; the LLM critic uses chat samples to
+    disambiguate."""
+    rows = conn.execute(
+        """SELECT id, last_followup_at FROM Task
+           WHERE user_id = ? AND last_followup_at IS NOT NULL""",
+        (user_id,),
+    ).fetchall()
+    measurable = 0
+    grew = 0
+    for r in rows:
+        fu_iso = r["last_followup_at"]
+        before = conn.execute(
+            """SELECT file_count FROM FolderSnapshot
+               WHERE task_id = ? AND taken_at < ?
+               ORDER BY taken_at DESC LIMIT 1""",
+            (r["id"], fu_iso),
+        ).fetchone()
+        after = conn.execute(
+            """SELECT file_count FROM FolderSnapshot
+               WHERE task_id = ? AND taken_at >= ?
+               ORDER BY taken_at DESC LIMIT 1""",
+            (r["id"], fu_iso),
+        ).fetchone()
+        if before is None or after is None:
+            continue
+        measurable += 1
+        if after["file_count"] > before["file_count"]:
+            grew += 1
+    if measurable < 2:
+        return (None, None)
+    ratio = grew / measurable
+    return (ratio, ratio)
+
+
 @trace_subsystem("tendencies")
 def extract_features(
     conn: sqlite3.Connection,
@@ -123,13 +164,16 @@ def extract_features(
     are None so callers (and the LLM critic) can be cautious.
     """
     _now = now or datetime.now(timezone.utc)
+    sharp_ratio, gentle_ratio = _extract_then_progress_ratios(
+        conn, user_id, _now
+    )
     return {
         "chat_count_7d": _extract_chat_count_7d(conn, user_id, _now),
         "avg_deadline_buffer_days": _extract_avg_deadline_buffer_days(
             conn, user_id, _now
         ),
         "peak_hour_histogram": _extract_peak_hour_histogram(conn, user_id, _now),
-        "sharp_then_progress_ratio": None,
-        "gentle_then_progress_ratio": None,
+        "sharp_then_progress_ratio": sharp_ratio,
+        "gentle_then_progress_ratio": gentle_ratio,
         "snapshot_growth_pattern": None,
     }

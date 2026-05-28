@@ -131,5 +131,57 @@ class TestChatStatistics(unittest.TestCase):
         self.assertEqual(sum(hist), 5)
 
 
+class TestThenProgressRatio(unittest.TestCase):
+    def setUp(self):
+        self.conn = _fresh_conn()
+        _insert_user(self.conn, "u-prog")
+        now = datetime(2026, 5, 28, tzinfo=timezone.utc)
+        # 2 tasks, each with a followup then snapshots.
+        for i, grew in enumerate([True, False]):
+            fu = (now - timedelta(days=2)).isoformat()
+            self.conn.execute(
+                "INSERT INTO Task (id, user_id, title, deadline_at, status, "
+                "created_at, updated_at, last_followup_at) "
+                "VALUES (?, ?, ?, ?, 'open', ?, ?, ?)",
+                (100 + i, "u-prog", f"t{i}",
+                 (now + timedelta(days=5)).isoformat(),
+                 fu, fu, fu),
+            )
+            # Snapshot before
+            self.conn.execute(
+                "INSERT INTO FolderSnapshot (task_id, taken_at, file_count, "
+                "total_bytes, newest_mtime, files_json) "
+                "VALUES (?, ?, 3, 300, ?, '[]')",
+                (100 + i, (now - timedelta(days=3)).isoformat(),
+                 (now - timedelta(days=3)).isoformat()),
+            )
+            # Snapshot after followup
+            self.conn.execute(
+                "INSERT INTO FolderSnapshot (task_id, taken_at, file_count, "
+                "total_bytes, newest_mtime, files_json) "
+                "VALUES (?, ?, ?, ?, ?, '[]')",
+                (100 + i, (now - timedelta(days=1)).isoformat(),
+                 5 if grew else 3, 500 if grew else 300,
+                 (now - timedelta(days=1)).isoformat()),
+            )
+        self.conn.commit()
+        self.now = now
+
+    def test_then_progress_ratio_uses_growth_after_followup(self):
+        from pipeline.tendencies import extract_features
+        out = extract_features(self.conn, "u-prog", now=self.now)
+        # 1 of 2 followups followed by growth → 0.5. Same value for both keys
+        # in v1 because per-followup tone is not yet stored.
+        self.assertAlmostEqual(out["sharp_then_progress_ratio"], 0.5)
+        self.assertAlmostEqual(out["gentle_then_progress_ratio"], 0.5)
+
+    def test_below_two_followups_returns_none(self):
+        from pipeline.tendencies import extract_features
+        _insert_user(self.conn, "u-prog-thin")
+        out = extract_features(self.conn, "u-prog-thin", now=self.now)
+        self.assertIsNone(out["sharp_then_progress_ratio"])
+        self.assertIsNone(out["gentle_then_progress_ratio"])
+
+
 if __name__ == "__main__":
     unittest.main()
