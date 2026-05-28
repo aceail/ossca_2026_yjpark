@@ -12,13 +12,15 @@ def _v(seed):
 def _setup_with_messages(messages):
     conn = sqlite3.connect(":memory:"); conn.row_factory = sqlite3.Row
     migrate(conn); ensure_vec_table(conn)
+    conn.execute("INSERT INTO User (id, created_at) VALUES ('u1', '2026-05-28')")
+    conn.commit()
     sid = conn.execute(
         "INSERT INTO ChatSession (user_id, persona_id, title, created_at, updated_at) "
         "VALUES ('u1', NULL, 't', '2026-05-28', '2026-05-28')"
     ).lastrowid
     for i, m in enumerate(messages):
         conn.execute(
-            "INSERT INTO ChatMessage (session_id, role, content, created_at) "
+            "INSERT INTO ChatMessage (chat_session_id, role, content, created_at) "
             "VALUES (?, 'user', ?, ?)",
             (sid, m, f"2026-05-28T00:00:{i:02d}"),
         )
