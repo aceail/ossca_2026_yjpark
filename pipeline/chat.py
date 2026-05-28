@@ -77,6 +77,63 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+_KO_WEEKDAY = ["월", "화", "수", "목", "금", "토", "일"]
+
+
+def _current_kst_stamp() -> str:
+    """YYYY-MM-DD HH:MM KST (요일) — chat 메시지에 prefix로 박음."""
+    from datetime import timedelta
+    now_kst = datetime.now(timezone.utc) + timedelta(hours=9)
+    wd = _KO_WEEKDAY[now_kst.weekday()]
+    return now_kst.strftime(f"%Y-%m-%d %H:%M KST ({wd}요일)")
+
+
+def _build_temporal_hints(user_message: str) -> str:
+    """Sprint 25: 사용자 발화의 상대 시간 표현 → 절대 날짜 강제 매핑.
+
+    qwen3 같은 모델은 시스템 prompt의 '오늘 날짜' 줄을 무시하고 cutoff
+    기준으로 '오늘'을 해석하는 경향이 있다. 사용자 메시지에 상대 단어가
+    있으면 그것만 명시 매핑해 다시 박는다.
+    """
+    if not user_message:
+        return ""
+    from datetime import date as _date, timedelta
+    today_kst = (datetime.now(timezone.utc) + timedelta(hours=9)).date()
+
+    def _line(label: str, d: _date) -> str:
+        return f"- {label} = {d.isoformat()} ({_KO_WEEKDAY[d.weekday()]}요일)"
+
+    lines: list[str] = []
+    if "오늘" in user_message:
+        lines.append(_line("오늘", today_kst))
+    if "내일" in user_message:
+        lines.append(_line("내일", today_kst + timedelta(days=1)))
+    if "모레" in user_message:
+        lines.append(_line("모레", today_kst + timedelta(days=2)))
+    if "이번주" in user_message:
+        end = today_kst + timedelta(days=(6 - today_kst.weekday()))
+        lines.append(_line("이번주 끝(일)", end))
+    if "다음주" in user_message:
+        next_mon = today_kst + timedelta(days=(7 - today_kst.weekday()))
+        next_sun = next_mon + timedelta(days=6)
+        lines.append(_line("다음주 시작(월)", next_mon))
+        lines.append(_line("다음주 끝(일)", next_sun))
+    for i, kw in enumerate(_KO_WEEKDAY):
+        if f"{kw}요일" in user_message:
+            days_ahead = (i - today_kst.weekday()) % 7
+            if days_ahead == 0:
+                days_ahead = 7
+            lines.append(_line(f"다음 {kw}요일", today_kst + timedelta(days=days_ahead)))
+            break
+    if not lines:
+        return ""
+    return (
+        "\n\n[시간 해석 강제 매핑 — 절대 무시 금지]\n"
+        + "\n".join(lines)
+        + "\n위 매핑을 그대로 사용. 학습 데이터의 옛 날짜 절대 사용 금지.\n"
+    )
+
+
 def _persona_system_prompt_with_memory(
     conn: sqlite3.Connection,
     persona_id: Optional[int],
@@ -488,11 +545,22 @@ def post_user_message(
     # 1. user 메시지 저장
     _record_message(conn, session_id, "user", content)
 
-    # 2. 누적 메시지 + system prompt (+ Sprint 20: top memory)
+    # 2. 누적 메시지 + system prompt (+ Sprint 20: top memory + Sprint 25: 시간 hint)
     system_prompt = _persona_system_prompt_with_memory(
         conn, sess["persona_id"], sess["user_id"],
     )
+    system_prompt = system_prompt + _build_temporal_hints(content)
     history = _load_history(conn, session_id)
+
+    # Sprint 25 보강: 마지막 user 메시지에 현재 시각을 직접 prefix. system prompt를
+    # 무시하는 모델도 user 메시지의 명시 시각은 따른다 (qwen3:8b 검증).
+    if history and history[-1].get("role") == "user":
+        original = history[-1]["content"]
+        history = history[:-1] + [{
+            "role": "user",
+            "content": f"[현재: {_current_kst_stamp()}]\n{original}",
+        }]
+
     messages: list[dict] = [{"role": "system", "content": system_prompt}] + history
 
     fn = call_fn if call_fn is not None else _call_ollama_chat
