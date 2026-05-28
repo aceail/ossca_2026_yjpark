@@ -105,6 +105,22 @@ class TestComputeMomentum(unittest.TestCase):
         self.assertEqual(m["streak_days"], 0)
         self.assertIsNone(m["last_active_date"])
 
+    def test_streak_respects_kst_boundary(self):
+        """자정 직후(05-28 00:30 KST = 05-27 15:30 UTC)에 어제 늦은 활동이
+        오늘 KST 활동으로 잘못 잡히지 않아야 함."""
+        conn, user_id = _setup()
+        # 2026-05-28 00:30 KST = 2026-05-27 15:30 UTC — 호출 시각
+        now = datetime(2026, 5, 27, 15, 30, tzinfo=timezone.utc)
+        sid = _seed_chat_session(conn, user_id)
+        # 2026-05-27 23:00 KST = 2026-05-27 14:00 UTC — 어제 KST 활동
+        yesterday_kst_evening = datetime(2026, 5, 27, 14, 0, tzinfo=timezone.utc)
+        for _ in range(3):
+            _seed_chat_message(conn, sid, when=yesterday_kst_evening)
+        m = _compute_momentum(conn, user_id, now=now)
+        # 오늘(05-28 KST) 활동 0, 어제(05-27 KST) 활성 → streak=1 (어제만)
+        # 하지만 streak는 오늘부터 거꾸로 — 오늘 비활성이면 streak=0
+        self.assertEqual(m["streak_days"], 0)
+
     def test_stagnant_open_task_listed(self):
         conn, user_id = _setup()
         now = datetime(2026, 5, 28, 12, 0, tzinfo=timezone.utc)

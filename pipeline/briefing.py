@@ -55,19 +55,32 @@ def should_brief(
     return last_str != today
 
 
+_KST = timezone(timedelta(hours=9))
+
+
 def _compute_momentum(
     conn: sqlite3.Connection, user_id: str, *, now: Optional[datetime] = None,
 ) -> dict:
-    """오늘 기준 연속 활성 일수 + stagnant open tasks. fail-soft 빈 dict."""
+    """오늘 기준 연속 활성 일수 + stagnant open tasks. fail-soft 빈 dict.
+
+    now가 None이면 현재 UTC. now는 tz-aware로 가정 (naive면 UTC로 간주).
+    일별 윈도우는 KST 자정 기준으로 생성하고 UTC ISO로 변환해 저장값과 비교.
+    """
     try:
-        n = now or _now_kst()
-        today = n.date()
+        if now is None:
+            n_utc = datetime.now(timezone.utc)
+        elif now.tzinfo is None:
+            n_utc = now.replace(tzinfo=timezone.utc)
+        else:
+            n_utc = now.astimezone(timezone.utc)
+        today = n_utc.astimezone(_KST).date()
         activity: dict[str, bool] = {}
         for delta in range(14):
             d = today - timedelta(days=delta)
-            start_dt = datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
-            start = start_dt.isoformat()
-            end = (start_dt + timedelta(days=1)).isoformat()
+            day_start_kst = datetime(d.year, d.month, d.day, tzinfo=_KST)
+            day_end_kst = day_start_kst + timedelta(days=1)
+            start = day_start_kst.astimezone(timezone.utc).isoformat()
+            end = day_end_kst.astimezone(timezone.utc).isoformat()
             closed_n = conn.execute(
                 "SELECT COUNT(*) FROM Task "
                 "WHERE user_id=? AND status='done' AND updated_at >= ? AND updated_at < ?",
@@ -98,7 +111,7 @@ def _compute_momentum(
             else:
                 break
 
-        cutoff = (n - timedelta(days=5)).isoformat()
+        cutoff = (n_utc - timedelta(days=5)).isoformat()
         stag_rows = conn.execute(
             "SELECT title, updated_at FROM Task "
             "WHERE user_id=? AND status='open' AND updated_at < ? "
@@ -112,7 +125,7 @@ def _compute_momentum(
                 dt = datetime.fromisoformat(r["updated_at"])
                 if dt.tzinfo is None:
                     dt = dt.replace(tzinfo=timezone.utc)
-                days = max(0, (n - dt).days)
+                days = max(0, (n_utc - dt).days)
             except (ValueError, TypeError):
                 days = 0
             stagnant.append({"title": r["title"], "days": days})
@@ -127,13 +140,19 @@ def _compute_momentum(
 
 
 def _load_tendencies(conn: sqlite3.Connection, user_id: str) -> dict:
-    """Sprint 28 산출물 로드. None/실패 시 빈 dict."""
+    """Sprint 28 산출물 로드. None/실패 시 빈 dict.
+
+    좁은 예외만 잡음 — schema rename 같은 코드 버그는 surface up.
+    """
     try:
         from pipeline.tendencies import load_from_memory
-        loaded = load_from_memory(conn, user_id)
-        return loaded if isinstance(loaded, dict) else {}
-    except Exception:
+    except ImportError:
         return {}
+    try:
+        loaded = load_from_memory(conn, user_id)
+    except sqlite3.Error:
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
 
 
 def _recall_rag(
@@ -141,17 +160,23 @@ def _recall_rag(
     user_id: str,
     open_titles: list[str],
 ) -> list[dict]:
-    """RAG episodic 회상. open task 제목들을 query로 사용. fail-soft."""
+    """RAG episodic 회상. open task 제목들을 query로 사용. fail-soft.
+
+    좁은 예외만 잡음 — retriever 내부에 이미 fail-soft 있음.
+    """
     if not open_titles:
         return []
     try:
         from rag.retriever import recall_semantic
+    except ImportError:
+        return []
+    try:
         query = " ".join(open_titles[:5])
         return recall_semantic(
             conn, user_id=user_id, query=query,
             kinds=("chat", "memory", "task"), k=3,
         )
-    except Exception:
+    except sqlite3.Error:
         return []
 
 
