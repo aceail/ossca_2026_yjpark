@@ -62,3 +62,23 @@ extractor (to be designed in sub-project ②) will:
 
 Do not change span names or attribute keys without updating that extractor and
 the schema doc in this file.
+
+## Adaptive Self-Learning Loop (Sprint 28)
+
+New spans introduced for the typed-tendencies extractor:
+
+- `tendencies.extract_features` — deterministic heuristic extractor
+- `tendencies.llm_critic` — qwen3:8b call (visible only when reflection actually calls the LLM)
+
+These spans always sit under `reflection.run_reflection`. If you add a new
+behavioral output that reads `UserMemory["adaptive_tendencies"]`, wrap the
+read site in your own span (or call `tendencies.load_from_memory` which is
+already instrumented) so the trace shows the read-side dependency too.
+
+Storage convention:
+
+- Key in UserMemory is the literal string `"adaptive_tendencies"`.
+- Value is the JSON shape defined in
+  `docs/superpowers/specs/2026-05-28-adaptive-self-learning-loop-design.md` §5.
+- Confidence threshold for *acting* on a dim is 0.3. Below that, behavior
+  falls back to persona/static defaults.

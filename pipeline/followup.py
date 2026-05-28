@@ -20,6 +20,7 @@ from typing import Optional
 
 from pipeline.chat import _record_message, create_chat_session  # noqa: WPS437
 from pipeline.followup_tone import decide_followup
+from pipeline.tendencies import load_from_memory as _load_tendencies
 from regret import compute_signal_level
 
 # Push 발송은 best-effort. import 단계 실패가 backend를 깨지 않게 graceful.
@@ -145,6 +146,7 @@ def dispatch_due_followups(
         progressed = _detect_progress(conn, t["id"])
         signal = compute_signal_level(conn, t["user_id"], now=now)
         persona_tone = _persona_tone_for_task(conn, t)
+        adaptive = _load_tendencies(conn, t["user_id"])
 
         decision = decide_followup(
             title=t["title"],
@@ -153,6 +155,7 @@ def dispatch_due_followups(
             progressed=progressed,
             signal_level=signal,
             persona_tone=persona_tone,
+            adaptive_tendencies=adaptive,
         )
         if not decision.should_send:
             continue

@@ -66,6 +66,7 @@ def decide_followup(
     progressed: bool,
     signal_level: str = "normal",
     persona_tone: Optional[str] = None,
+    adaptive_tendencies: Optional[dict] = None,
 ) -> FollowupDecision:
     """다음 follow-up을 보낼지·언제·어떤 톤으로 결정.
 
@@ -87,7 +88,16 @@ def decide_followup(
         )
 
     # 2. 마감 거리 → cooldown + 기본 톤
-    if days_until_deadline > 3:
+    # Sprint 28: adaptive kick-in based on the user's typical deadline buffer.
+    default_kick_in = 3
+    kick_in = default_kick_in
+    if adaptive_tendencies:
+        qual = adaptive_tendencies.get("qualitative") or {}
+        conf = adaptive_tendencies.get("confidence") or {}
+        buf = qual.get("typical_deadline_buffer_days")
+        if isinstance(buf, int) and conf.get("typical_deadline_buffer_days", 0) >= 0.3:
+            kick_in = max(default_kick_in, buf + 2)
+    if days_until_deadline > kick_in:
         return FollowupDecision(False, 24, "quiet", "")  # 너무 멀음, 묵묵히 기다림
     if days_until_deadline >= 2:
         base_cooldown = 24
@@ -114,6 +124,21 @@ def decide_followup(
     # 5. cooldown 체크
     if last_followup_hours_ago is not None and last_followup_hours_ago < base_cooldown:
         return FollowupDecision(False, base_cooldown, base_tone, "")
+
+    # Sprint 28: Adaptive Self-Learning Loop.
+    if adaptive_tendencies:
+        qual = adaptive_tendencies.get("qualitative") or {}
+        conf = adaptive_tendencies.get("confidence") or {}
+        pref = qual.get("tone_preference")
+        if pref and conf.get("tone_preference", 0) >= 0.3:
+            base_tone = pref  # type: ignore[assignment]
+        reaction = qual.get("reaction_to_sharp")
+        if (
+            reaction == "shuts_down"
+            and conf.get("reaction_to_sharp", 0) >= 0.3
+            and base_tone == "sharp"
+        ):
+            base_tone = "witty"
 
     msg = _phrase_for(
         base_tone,
