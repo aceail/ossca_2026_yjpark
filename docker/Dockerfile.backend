@@ -13,12 +13,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # 우리 backend는 표준 stdlib·fastapi·pydantic·cryptography·pywebpush(옵션)만 필요.
 # requirements.txt 없는 환경 — 명시 install.
+# Sprint 27: OpenTelemetry stack for Phoenix tracing.
 RUN pip install --no-cache-dir \
     'fastapi>=0.110' \
     'uvicorn[standard]>=0.27' \
     'pydantic>=2.6' \
     'cryptography>=42' \
-    'pywebpush>=2.0'
+    'pywebpush>=2.0' \
+    'opentelemetry-api>=1.27' \
+    'opentelemetry-sdk>=1.27' \
+    'opentelemetry-exporter-otlp-proto-http>=1.27' \
+    'opentelemetry-instrumentation-fastapi>=0.48b0'
 
 COPY . /app
 
