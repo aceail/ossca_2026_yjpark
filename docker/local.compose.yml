@@ -12,6 +12,9 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+    # GPU 할당 (CDI). 호스트의 nvidia.com/gpu=N 디바이스를 컨테이너에 매핑.
+    devices:
+      - nvidia.com/gpu=${OLLAMA_GPU_ID:-all}
     healthcheck:
       # ollama image lacks curl/wget; `ollama list` exits 0 once the daemon is ready.
       test: ["CMD", "ollama", "list"]
