@@ -495,5 +495,58 @@ class TestFollowupTiming(unittest.TestCase):
         self.assertFalse(d.should_send)
 
 
+class TestEndToEnd(unittest.TestCase):
+    def test_reflection_then_dispatch_picks_personalized_tone(self):
+        """Reflection populates tendencies → dispatch picks persisted tone."""
+        from pipeline.reflection import run_reflection
+        from pipeline.followup import dispatch_due_followups
+
+        conn = _fresh_conn()
+        _insert_user(conn, "u-e2e")
+        # Seed: one open task with deadline 1 day away
+        from datetime import timedelta
+        now = datetime(2026, 5, 28, tzinfo=timezone.utc)
+        deadline = (now + timedelta(days=1)).isoformat()
+        conn.execute(
+            "INSERT INTO Task (user_id, title, deadline_at, status, "
+            "created_at, updated_at, last_followup_at) "
+            "VALUES ('u-e2e', 'report', ?, 'open', ?, ?, NULL)",
+            (deadline, now.isoformat(), now.isoformat()),
+        )
+        # Seed minimal chat
+        sess = conn.execute(
+            "INSERT INTO ChatSession (user_id, persona_id, created_at, "
+            "updated_at) VALUES ('u-e2e', NULL, ?, ?)",
+            (now.isoformat(), now.isoformat()),
+        ).lastrowid
+        conn.execute(
+            "INSERT INTO ChatMessage (chat_session_id, role, content, "
+            "created_at) VALUES (?, 'user', 'hi', ?)",
+            (sess, now.isoformat()),
+        )
+        conn.commit()
+
+        # Run reflection with a critic that prefers 'witty'
+        responses = iter([
+            {"message": {"content": '[]'}},  # reflection LLM
+            {"message": {"content":
+                '{"tone_preference":"witty","reaction_to_sharp":"neutral",'
+                '"typical_deadline_buffer_days":2,'
+                '"peak_work_hours":[14,15],'
+                '"confidence":{"tone_preference":0.85,'
+                '"reaction_to_sharp":0.5,'
+                '"typical_deadline_buffer_days":0.8,'
+                '"peak_work_hours":0.7}}'}},
+        ])
+        def fake_call_fn(messages, **kw):
+            return next(responses)
+        run_reflection(conn, "u-e2e", now=now, call_fn=fake_call_fn)
+
+        # Dispatch should pick the 'witty' tone from the persisted tendencies.
+        sent = dispatch_due_followups(conn, now=now)
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(sent[0]["tone"], "witty")
+
+
 if __name__ == "__main__":
     unittest.main()
