@@ -107,5 +107,46 @@ class TestTraceSubsystem(unittest.TestCase):
         self.assertTrue(any("exception" in e.name for e in spans[0].events))
 
 
+class TestTraceTool(unittest.TestCase):
+    def setUp(self):
+        self.exporter = _install_in_memory_exporter()
+
+    def test_captures_tool_name_from_call(self):
+        """@trace_tool reads `name` from kwargs at call time (since the
+        Hermes tool registry dispatches by name argument)."""
+        from agent.tracing import trace_tool
+
+        @trace_tool
+        def dispatch(conn, user_id, name, args):
+            return {"ok": True, "called": name}
+
+        result = dispatch(None, "u1", name="create_task", args={"title": "x"})
+        self.assertEqual(result["called"], "create_task")
+
+        spans = self.exporter.get_finished_spans()
+        self.assertEqual(len(spans), 1)
+        self.assertEqual(spans[0].name, "tool.create_task")
+        self.assertEqual(
+            spans[0].attributes.get("tomorrow_you.tool_name"), "create_task",
+        )
+
+    def test_records_tool_error_result(self):
+        """A tool that returns {ok: False, error: ...} is recorded as
+        non-exception ERROR (the tool didn't raise but reported failure)."""
+        from agent.tracing import trace_tool
+
+        @trace_tool
+        def dispatch(conn, user_id, name, args):
+            return {"ok": False, "error": "task not found"}
+
+        dispatch(None, "u1", name="update_task", args={})
+
+        spans = self.exporter.get_finished_spans()
+        self.assertEqual(len(spans), 1)
+        self.assertEqual(
+            spans[0].attributes.get("tomorrow_you.tool_ok"), False,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

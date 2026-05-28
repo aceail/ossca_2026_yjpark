@@ -104,3 +104,44 @@ def trace_subsystem(name: str) -> Callable[[F], F]:
         return wrapper  # type: ignore[return-value]
 
     return decorator
+
+
+def trace_tool(func: F) -> F:
+    """Decorator for the Hermes tool dispatcher. Reads `name` kwarg at
+    call time to label the span as 'tool.{name}'. Records the result
+    dict's 'ok' field as tomorrow_you.tool_ok."""
+    from opentelemetry import trace as _trace
+    tracer = _trace.get_tracer(__name__)
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        tool_name = kwargs.get("name") or "unknown"
+        with tracer.start_as_current_span(f"tool.{tool_name}") as span:
+            try:
+                span.set_attribute("tomorrow_you.tool_name", tool_name)
+            except Exception:
+                pass
+            try:
+                result = func(*args, **kwargs)
+                try:
+                    if isinstance(result, dict) and "ok" in result:
+                        span.set_attribute(
+                            "tomorrow_you.tool_ok", bool(result.get("ok"))
+                        )
+                        if not result.get("ok"):
+                            err = str(result.get("error") or "")[:200]
+                            if err:
+                                span.set_attribute("tomorrow_you.tool_error", err)
+                except Exception:
+                    pass
+                return result
+            except Exception as exc:
+                try:
+                    from opentelemetry.trace import Status, StatusCode
+                    span.record_exception(exc)
+                    span.set_status(Status(StatusCode.ERROR, str(exc)))
+                except Exception:
+                    pass
+                raise
+
+    return wrapper  # type: ignore[return-value]
