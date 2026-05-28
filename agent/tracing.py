@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from functools import wraps
 from typing import Callable, TypeVar
 
@@ -132,6 +133,54 @@ def trace_tool(func: F) -> F:
                             err = str(result.get("error") or "")[:200]
                             if err:
                                 span.set_attribute("tomorrow_you.tool_error", err)
+                except Exception:
+                    pass
+                return result
+            except Exception as exc:
+                try:
+                    from opentelemetry.trace import Status, StatusCode
+                    span.record_exception(exc)
+                    span.set_status(Status(StatusCode.ERROR, str(exc)))
+                except Exception:
+                    pass
+                raise
+
+    return wrapper  # type: ignore[return-value]
+
+
+def trace_llm(func: F) -> F:
+    """Decorator for an Ollama HTTP call. Captures model + latency_ms +
+    rough prompt/response sizes. We do this manually because the project
+    uses urllib (not the openai SDK), so OpenInference auto-instrumentation
+    does not apply."""
+    from opentelemetry import trace as _trace
+    tracer = _trace.get_tracer(__name__)
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        model = kwargs.get("model") or "unknown"
+        with tracer.start_as_current_span("llm.call") as span:
+            try:
+                span.set_attribute("llm.model", model)
+                msgs = args[0] if args else kwargs.get("messages") or []
+                if isinstance(msgs, list):
+                    span.set_attribute("llm.prompt_chars",
+                                       sum(len(str(m.get("content", "")))
+                                           for m in msgs if isinstance(m, dict)))
+            except Exception:
+                pass
+            t0 = time.perf_counter()
+            try:
+                result = func(*args, **kwargs)
+                try:
+                    elapsed_ms = (time.perf_counter() - t0) * 1000.0
+                    span.set_attribute("llm.latency_ms", int(elapsed_ms))
+                    if isinstance(result, dict):
+                        content = (result.get("message") or {}).get("content")
+                        if isinstance(content, str):
+                            span.set_attribute(
+                                "llm.response_chars", len(content)
+                            )
                 except Exception:
                     pass
                 return result

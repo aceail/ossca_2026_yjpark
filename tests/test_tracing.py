@@ -148,5 +148,30 @@ class TestTraceTool(unittest.TestCase):
         )
 
 
+class TestTraceLLM(unittest.TestCase):
+    def setUp(self):
+        self.exporter = _install_in_memory_exporter()
+
+    def test_records_model_and_latency(self):
+        from agent.tracing import trace_llm
+
+        @trace_llm
+        def fake_ollama_call(messages, model, **kw):
+            return {"message": {"content": "hello world"}}
+
+        result = fake_ollama_call(
+            [{"role": "user", "content": "hi"}], model="qwen3:8b",
+        )
+        self.assertEqual(result["message"]["content"], "hello world")
+
+        spans = self.exporter.get_finished_spans()
+        self.assertEqual(len(spans), 1)
+        self.assertEqual(spans[0].name, "llm.call")
+        attrs = dict(spans[0].attributes)
+        self.assertEqual(attrs.get("llm.model"), "qwen3:8b")
+        # latency_ms is a number ≥ 0
+        self.assertGreaterEqual(attrs.get("llm.latency_ms", -1), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
