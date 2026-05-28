@@ -63,10 +63,12 @@ class ChatSessionItem(BaseModel):
     persona_id: Optional[int] = None
     persona_name: Optional[str] = None
     avatar_icon: Optional[str] = None
+    avatar_color: Optional[str] = None
     title: Optional[str] = None
     created_at: str
     updated_at: str
     message_count: int
+    last_message: Optional[str] = None
 
 
 class ListSessionsResponse(BaseModel):

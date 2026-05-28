@@ -19,9 +19,11 @@ interface ChatSessionListItem {
   persona_id?: number | null;
   persona_name?: string | null;
   avatar_icon?: string | null;
+  avatar_color?: string | null;
   title?: string | null;
   message_count: number;
   updated_at: string;
+  last_message?: string | null;
 }
 
 interface TaskSummary {
@@ -30,6 +32,30 @@ interface TaskSummary {
   deadline_at: string | null;
   folder_path: string | null;
   status: string;
+}
+
+function relativeTime(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  if (sameDay) {
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    return `${hh}:${mm}`;
+  }
+  const y = new Date(now);
+  y.setDate(now.getDate() - 1);
+  if (
+    d.getFullYear() === y.getFullYear() &&
+    d.getMonth() === y.getMonth() &&
+    d.getDate() === y.getDate()
+  ) {
+    return "어제";
+  }
+  return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
 // Sprint 15: assistant 메시지 안 action 라인을 rich card로 추출
@@ -311,9 +337,29 @@ export default function ChatPage() {
         className="flex items-center justify-between px-6 py-4"
         style={{ borderBottom: "1px solid var(--color-border-subtle)" }}
       >
-        <h1 className="text-[18px] font-semibold" style={{ fontFamily: "var(--font-feeling)" }}>
-          내일의 너와 대화
-        </h1>
+        <div className="min-w-0">
+          <h1
+            className="text-[17px] font-semibold truncate"
+            style={{ fontFamily: "var(--font-feeling)" }}
+          >
+            {(() => {
+              const cur = sessions.find((s) => s.id === sessionId);
+              return (cur?.title && cur.title.trim()) || cur?.persona_name || "내일의 너와 대화";
+            })()}
+          </h1>
+          {(() => {
+            const cur = sessions.find((s) => s.id === sessionId);
+            if (!cur) return null;
+            return (
+              <p
+                className="text-[11px] mt-0.5"
+                style={{ color: "var(--color-text-secondary)" }}
+              >
+                {cur.avatar_icon ?? "💬"} {cur.persona_name ?? "내일의 나"} · 메시지 {cur.message_count}
+              </p>
+            );
+          })()}
+        </div>
         <Button variant="ghost" size="sm" onClick={handleNewSession} disabled={sending}>
           + 새 대화
         </Button>
@@ -331,33 +377,58 @@ export default function ChatPage() {
             </p>
           ) : (
             <ul className="flex flex-col gap-1 px-2">
-              {sessions.map((s) => (
-                <li key={s.id}>
-                  <button
-                    type="button"
-                    onClick={() => switchSession(s.id)}
-                    className="w-full text-left px-3 py-2 rounded-lg text-[13px] transition-colors"
-                    style={{
-                      backgroundColor:
-                        s.id === sessionId ? "var(--color-bg-card)" : "transparent",
-                      border:
-                        s.id === sessionId
-                          ? "1px solid var(--color-border-subtle)"
-                          : "1px solid transparent",
-                    }}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span aria-hidden>{s.avatar_icon ?? "💬"}</span>
-                      <span className="truncate">
-                        {s.persona_name ?? "내일의 나"}
-                      </span>
-                    </div>
-                    <div className="text-[11px] mt-0.5" style={{ color: "var(--color-text-secondary)" }}>
-                      메시지 {s.message_count}개
-                    </div>
-                  </button>
-                </li>
-              ))}
+              {sessions.map((s) => {
+                const isActive = s.id === sessionId;
+                const title =
+                  (s.title && s.title.trim()) ||
+                  (s.last_message &&
+                    s.last_message.trim().split("\n")[0].slice(0, 30)) ||
+                  "(빈 대화)";
+                const preview = (s.last_message ?? "").replace(/\n+/g, " ").trim();
+                return (
+                  <li key={s.id}>
+                    <button
+                      type="button"
+                      onClick={() => switchSession(s.id)}
+                      className="w-full text-left px-3 py-2 rounded-lg transition-colors flex gap-2"
+                      style={{
+                        backgroundColor: isActive ? "var(--color-bg-card)" : "transparent",
+                        border: `1px solid ${isActive ? "var(--color-border-subtle)" : "transparent"}`,
+                      }}
+                    >
+                      <span
+                        aria-hidden
+                        className="mt-1 w-1 rounded-full flex-shrink-0"
+                        style={{
+                          backgroundColor: s.avatar_color ?? "var(--color-text-secondary)",
+                          minHeight: "32px",
+                        }}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[13px] font-medium truncate">{title}</span>
+                          <span
+                            className="text-[10px] flex-shrink-0"
+                            style={{ color: "var(--color-text-secondary)" }}
+                          >
+                            {relativeTime(s.updated_at)}
+                          </span>
+                        </div>
+                        <div
+                          className="text-[11px] mt-0.5 truncate"
+                          style={{ color: "var(--color-text-secondary)" }}
+                        >
+                          <span aria-hidden className="mr-1">
+                            {s.avatar_icon ?? "💬"}
+                          </span>
+                          {preview ||
+                            `${s.persona_name ?? "내일의 나"} · 메시지 ${s.message_count}`}
+                        </div>
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </aside>

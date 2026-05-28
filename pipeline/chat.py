@@ -431,10 +431,29 @@ def _record_message(
            VALUES (?, ?, ?, ?)""",
         (session_id, role, content, now),
     )
-    conn.execute(
-        "UPDATE ChatSession SET updated_at = ? WHERE id = ?",
-        (now, session_id),
-    )
+    # Sprint 24: session title 자동 생성 — 첫 user 메시지의 첫 ~24자를 title로
+    if role == "user":
+        row = conn.execute(
+            "SELECT title FROM ChatSession WHERE id = ?", (session_id,),
+        ).fetchone()
+        if row and not (row["title"] or "").strip():
+            snippet = content.strip().replace("\n", " ")
+            if len(snippet) > 24:
+                snippet = snippet[:24] + "…"
+            conn.execute(
+                "UPDATE ChatSession SET title = ?, updated_at = ? WHERE id = ?",
+                (snippet, now, session_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE ChatSession SET updated_at = ? WHERE id = ?",
+                (now, session_id),
+            )
+    else:
+        conn.execute(
+            "UPDATE ChatSession SET updated_at = ? WHERE id = ?",
+            (now, session_id),
+        )
     conn.commit()
     return cur.lastrowid
 
@@ -482,6 +501,7 @@ def post_user_message(
     final_content = ""
     action_lines: list[str] = []
     tool_calls_total = 0
+    last_msg: dict = {}
 
     for _round in range(AGENT_MAX_TOOL_ROUNDS):
         try:
@@ -498,6 +518,7 @@ def post_user_message(
             final_content = msg
             break
 
+        last_msg = msg if isinstance(msg, dict) else {}
         tool_calls = msg.get("tool_calls") or []
         if not tool_calls:
             final_content = (msg.get("content") or "").strip()
@@ -533,16 +554,22 @@ def post_user_message(
                 "content": json.dumps(result, ensure_ascii=False),
             })
 
+    # Sprint 24: qwen3 같은 모델은 reasoning을 thinking 필드에 분리해
+    # content를 빈 채로 응답. action_lines가 있으면 그것만으로 충분; 둘 다
+    # 비면 thinking을 한두 문장 요약해 보여주고, 그것도 없으면 친절 안내.
+    if not final_content and last_msg:
+        thinking = (last_msg.get("thinking") or "").strip()
+        if thinking:
+            # 첫 한두 문장만 사용 — 너무 길게 보이지 않게
+            short = thinking.split(". ")[:2]
+            final_content = ". ".join(s.strip() for s in short if s.strip()).strip()
+            if final_content and not final_content.endswith("."):
+                final_content += "."
+
     if not final_content and not action_lines:
-        # 응답 패턴 다 비어있으면 옛 JSON-action 패턴 시도 (backward compat)
-        try:
-            raw = fn(messages) if tools is None else fn(messages)
-            if isinstance(raw, dict):
-                final_content = (raw.get("content") or "").strip()
-            elif isinstance(raw, str):
-                final_content = raw.strip()
-        except Exception:
-            final_content = "(빈 응답)"
+        final_content = (
+            "방금 메시지에 응답을 못 만들었어요. 좀 더 짧게 또는 구체적으로 다시 말씀해주실래요?"
+        )
 
     # backward compat: JSON-action 패턴도 처리
     parsed = _try_parse_action_response(final_content)
@@ -586,9 +613,12 @@ def list_messages(conn: sqlite3.Connection, session_id: int) -> list[dict]:
 
 def list_sessions(conn: sqlite3.Connection, user_id: str) -> list[dict]:
     rows = conn.execute(
-        """SELECT cs.id, cs.persona_id, p.name AS persona_name, p.avatar_icon,
+        """SELECT cs.id, cs.persona_id, p.name AS persona_name,
+                  p.avatar_icon, p.avatar_color,
                   cs.title, cs.created_at, cs.updated_at,
-                  (SELECT COUNT(*) FROM ChatMessage m WHERE m.chat_session_id = cs.id) AS message_count
+                  (SELECT COUNT(*) FROM ChatMessage m WHERE m.chat_session_id = cs.id) AS message_count,
+                  (SELECT m.content FROM ChatMessage m
+                     WHERE m.chat_session_id = cs.id ORDER BY m.id DESC LIMIT 1) AS last_message
            FROM ChatSession cs
            LEFT JOIN Persona p ON p.id = cs.persona_id
            WHERE cs.user_id = ?
