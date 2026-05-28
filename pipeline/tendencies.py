@@ -357,3 +357,39 @@ def extract_features(
             conn, user_id, _now
         ),
     }
+
+
+_MEMORY_KEY = "adaptive_tendencies"
+
+
+def save_to_memory(
+    conn: sqlite3.Connection, user_id: str, payload: dict,
+) -> None:
+    """Persist the merged tendencies JSON under UserMemory[adaptive_tendencies]."""
+    from pipeline.memory import upsert_memory
+    upsert_memory(
+        conn,
+        user_id=user_id,
+        key=_MEMORY_KEY,
+        value=json.dumps(payload, ensure_ascii=False),
+        source="adaptive",
+    )
+
+
+def load_from_memory(
+    conn: sqlite3.Connection, user_id: str,
+) -> Optional[dict]:
+    """Read and parse UserMemory[adaptive_tendencies]. None on missing/invalid."""
+    row = conn.execute(
+        "SELECT value FROM UserMemory WHERE user_id = ? AND key = ?",
+        (user_id, _MEMORY_KEY),
+    ).fetchone()
+    if row is None:
+        return None
+    try:
+        parsed = json.loads(row["value"])
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    return parsed

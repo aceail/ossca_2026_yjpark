@@ -335,5 +335,41 @@ class TestMerge(unittest.TestCase):
         self.assertEqual(out["raw_features"]["avg_deadline_buffer_days"], 2.0)
 
 
+class TestMemoryRoundTrip(unittest.TestCase):
+    def test_save_then_load_returns_same_dict(self):
+        from pipeline.tendencies import save_to_memory, load_from_memory, merge
+
+        conn = _fresh_conn()
+        _insert_user(conn, "u-mem")
+        payload = merge(
+            {"chat_count_7d": 7, "avg_deadline_buffer_days": 1.4,
+             "peak_hour_histogram": [0]*24, "sharp_then_progress_ratio": 0.5,
+             "gentle_then_progress_ratio": 0.5, "snapshot_growth_pattern": "flat"},
+            {"tone_preference": "sharp",
+             "confidence": {"tone_preference": 0.8}},
+            now=datetime(2026, 5, 28, 12, 0, 0, tzinfo=timezone.utc),
+        )
+        save_to_memory(conn, "u-mem", payload)
+        loaded = load_from_memory(conn, "u-mem")
+        self.assertEqual(loaded["qualitative"]["tone_preference"], "sharp")
+        self.assertEqual(loaded["confidence"]["tone_preference"], 0.8)
+        self.assertEqual(loaded["raw_features"]["chat_count_7d"], 7)
+
+    def test_load_returns_none_when_missing(self):
+        from pipeline.tendencies import load_from_memory
+        conn = _fresh_conn()
+        _insert_user(conn, "u-empty")
+        self.assertIsNone(load_from_memory(conn, "u-empty"))
+
+    def test_load_returns_none_on_invalid_json(self):
+        from pipeline.tendencies import load_from_memory
+        from pipeline.memory import upsert_memory
+        conn = _fresh_conn()
+        _insert_user(conn, "u-bad")
+        upsert_memory(conn, user_id="u-bad",
+                      key="adaptive_tendencies", value="{not json")
+        self.assertIsNone(load_from_memory(conn, "u-bad"))
+
+
 if __name__ == "__main__":
     unittest.main()
