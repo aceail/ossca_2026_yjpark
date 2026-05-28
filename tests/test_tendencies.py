@@ -463,5 +463,37 @@ class TestFollowupTone(unittest.TestCase):
         self.assertEqual(d.tone, "witty")
 
 
+class TestFollowupTiming(unittest.TestCase):
+    def test_late_starter_buffer_widens_kick_in(self):
+        from pipeline.followup_tone import decide_followup
+        tendencies = {
+            "qualitative": {"typical_deadline_buffer_days": 5},
+            "confidence": {"typical_deadline_buffer_days": 0.9},
+        }
+        # User normally starts 5 days before deadline. Task 6 days away → should fire.
+        d = decide_followup(
+            title="t", days_until_deadline=6,
+            last_followup_hours_ago=None, progressed=False,
+            signal_level="normal", persona_tone=None,
+            adaptive_tendencies=tendencies,
+        )
+        self.assertTrue(d.should_send)
+
+    def test_user_with_buffer_no_fire_when_far_out(self):
+        from pipeline.followup_tone import decide_followup
+        tendencies = {
+            "qualitative": {"typical_deadline_buffer_days": 1},
+            "confidence": {"typical_deadline_buffer_days": 0.9},
+        }
+        # User normally crams D-1. Task 8 days away → no fire (kick_in = 3).
+        d = decide_followup(
+            title="t", days_until_deadline=8,
+            last_followup_hours_ago=None, progressed=False,
+            signal_level="normal", persona_tone=None,
+            adaptive_tendencies=tendencies,
+        )
+        self.assertFalse(d.should_send)
+
+
 if __name__ == "__main__":
     unittest.main()

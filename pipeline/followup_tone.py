@@ -88,7 +88,16 @@ def decide_followup(
         )
 
     # 2. 마감 거리 → cooldown + 기본 톤
-    if days_until_deadline > 3:
+    # Sprint 28: adaptive kick-in based on the user's typical deadline buffer.
+    default_kick_in = 3
+    kick_in = default_kick_in
+    if adaptive_tendencies:
+        qual = adaptive_tendencies.get("qualitative") or {}
+        conf = adaptive_tendencies.get("confidence") or {}
+        buf = qual.get("typical_deadline_buffer_days")
+        if isinstance(buf, int) and conf.get("typical_deadline_buffer_days", 0) >= 0.3:
+            kick_in = max(default_kick_in, buf + 2)
+    if days_until_deadline > kick_in:
         return FollowupDecision(False, 24, "quiet", "")  # 너무 멀음, 묵묵히 기다림
     if days_until_deadline >= 2:
         base_cooldown = 24
