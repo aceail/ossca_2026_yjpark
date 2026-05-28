@@ -7,7 +7,7 @@ import sys
 import sqlite3
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -53,6 +53,46 @@ class TestExtractFeaturesShape(unittest.TestCase):
             "snapshot_growth_pattern",
         ):
             self.assertIn(k, out)
+
+
+class TestChatStatistics(unittest.TestCase):
+    def setUp(self):
+        self.conn = _fresh_conn()
+        _insert_user(self.conn, "u-chat")
+        # 5 chat messages in the last 7 days (KST hours 13–15).
+        now = datetime(2026, 5, 28, 12, 0, 0, tzinfo=timezone.utc)
+        sess = self.conn.execute(
+            "INSERT INTO ChatSession (user_id, persona_id, created_at, updated_at)"
+            " VALUES (?, NULL, ?, ?)",
+            ("u-chat", now.isoformat(), now.isoformat()),
+        ).lastrowid
+        # KST = UTC+9. 13–15 KST = 04–06 UTC.
+        for i, h in enumerate([4, 5, 5, 5, 6]):
+            t = (now - timedelta(days=i, hours=0, minutes=0)).replace(hour=h)
+            self.conn.execute(
+                "INSERT INTO ChatMessage (chat_session_id, role, content, created_at)"
+                " VALUES (?, 'user', ?, ?)",
+                (sess, f"msg{i}", t.isoformat()),
+            )
+        self.conn.commit()
+        self.now = now
+
+    def test_chat_count_7d_counts_recent_user_messages(self):
+        from pipeline.tendencies import extract_features
+        out = extract_features(self.conn, "u-chat", now=self.now)
+        self.assertEqual(out["chat_count_7d"], 5)
+
+    def test_peak_hour_histogram_is_24_buckets_kst(self):
+        from pipeline.tendencies import extract_features
+        out = extract_features(self.conn, "u-chat", now=self.now)
+        hist = out["peak_hour_histogram"]
+        self.assertIsInstance(hist, list)
+        self.assertEqual(len(hist), 24)
+        # 4 UTC = 13 KST, 5 UTC = 14 KST, 6 UTC = 15 KST.
+        self.assertEqual(hist[13], 1)
+        self.assertEqual(hist[14], 3)
+        self.assertEqual(hist[15], 1)
+        self.assertEqual(sum(hist), 5)
 
 
 if __name__ == "__main__":
