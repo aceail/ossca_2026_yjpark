@@ -13,7 +13,8 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      # ollama image lacks curl/wget; `ollama list` exits 0 once the daemon is ready.
+      test: ["CMD", "ollama", "list"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -62,14 +63,15 @@ services:
     volumes:
       - naeil_data:/data
     ports:
-      - "8001:8001"
+      # Host port overridable for environments where :8001 is taken (env: TOMORROW_YOU_BACKEND_PORT).
+      - "${TOMORROW_YOU_BACKEND_PORT:-8001}:8001"
 
   frontend:
     build:
       context: ..
       dockerfile: docker/Dockerfile.frontend
       args:
-        NEXT_PUBLIC_API_BASE: ${PUBLIC_API_BASE:-http://localhost:8001}
+        NEXT_PUBLIC_API_BASE: ${PUBLIC_API_BASE:-http://localhost:${TOMORROW_YOU_BACKEND_PORT:-8001}}
         NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NAEIL_VAPID_PUBLIC_KEY:-}
     container_name: naeil-frontend
     restart: unless-stopped
