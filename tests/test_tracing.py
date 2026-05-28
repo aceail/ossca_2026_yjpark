@@ -7,6 +7,14 @@ import sys
 import unittest
 from pathlib import Path
 
+from opentelemetry import trace as _otel_trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+    InMemorySpanExporter,
+)
+from opentelemetry.trace import Status, StatusCode
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -47,6 +55,56 @@ class TestTracingInit(unittest.TestCase):
         init_tracing()
         init_tracing()  # 두 번 호출해도 예외 없음
         self.assertTrue(is_enabled())
+
+
+def _install_in_memory_exporter() -> InMemorySpanExporter:
+    """Replace the global TracerProvider with one that exports to memory.
+    Returns the exporter for assertions."""
+    _reset_otel_globals()
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    _otel_trace.set_tracer_provider(provider)
+    import agent.tracing as _t
+    _t._INITIALIZED = True
+    _t._ENABLED = True
+    return exporter
+
+
+class TestTraceSubsystem(unittest.TestCase):
+    def setUp(self):
+        self.exporter = _install_in_memory_exporter()
+
+    def test_creates_span_with_attributes(self):
+        from agent.tracing import trace_subsystem
+
+        @trace_subsystem("memory")
+        def my_func(user_id: str, x: int) -> int:
+            return x * 2
+
+        self.assertEqual(my_func("u1", 21), 42)
+
+        spans = self.exporter.get_finished_spans()
+        self.assertEqual(len(spans), 1)
+        self.assertEqual(spans[0].name, "memory.my_func")
+        self.assertEqual(
+            spans[0].attributes.get("tomorrow_you.subsystem"), "memory",
+        )
+
+    def test_records_exception_and_reraises(self):
+        from agent.tracing import trace_subsystem
+
+        @trace_subsystem("memory")
+        def bad_func():
+            raise ValueError("boom")
+
+        with self.assertRaises(ValueError):
+            bad_func()
+
+        spans = self.exporter.get_finished_spans()
+        self.assertEqual(len(spans), 1)
+        self.assertEqual(spans[0].status.status_code, StatusCode.ERROR)
+        self.assertTrue(any("exception" in e.name for e in spans[0].events))
 
 
 if __name__ == "__main__":

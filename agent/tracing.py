@@ -16,8 +16,12 @@ from __future__ import annotations
 
 import logging
 import os
+from functools import wraps
+from typing import Callable, TypeVar
 
 logger = logging.getLogger(__name__)
+
+F = TypeVar("F", bound=Callable)
 
 _INITIALIZED = False
 _ENABLED = False
@@ -69,3 +73,34 @@ def init_tracing(*, service_name: str = "tomorrow-you-backend") -> None:
     except Exception as exc:
         logger.warning("tracing init failed, falling back to NoOp: %s", exc)
         # _ENABLED stays False; OTel's NoOpTracerProvider is the default
+
+
+def trace_subsystem(name: str) -> Callable[[F], F]:
+    """Wrap a function in a span named '{name}.{func.__name__}' with
+    attribute tomorrow_you.subsystem=name. Exceptions are recorded as
+    ERROR-status span events, then re-raised."""
+    def decorator(func: F) -> F:
+        from opentelemetry import trace as _trace
+        tracer = _trace.get_tracer(__name__)
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            with tracer.start_as_current_span(f"{name}.{func.__name__}") as span:
+                try:
+                    span.set_attribute("tomorrow_you.subsystem", name)
+                except Exception:
+                    pass
+                try:
+                    return func(*args, **kwargs)
+                except Exception as exc:
+                    try:
+                        from opentelemetry.trace import Status, StatusCode
+                        span.record_exception(exc)
+                        span.set_status(Status(StatusCode.ERROR, str(exc)))
+                    except Exception:
+                        pass
+                    raise
+
+        return wrapper  # type: ignore[return-value]
+
+    return decorator
