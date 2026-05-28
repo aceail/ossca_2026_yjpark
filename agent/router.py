@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from .consent import has_consent
+from agent.tracing import trace_subsystem
 
 
 @dataclass
@@ -72,6 +73,7 @@ class ToolRouter:
     def __init__(self, conn: sqlite3.Connection) -> None:
         self._conn = conn
 
+    @trace_subsystem("agent")
     def route(
         self,
         input_context: str,
