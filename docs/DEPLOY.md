@@ -118,3 +118,48 @@ docker compose -f docker/local.compose.yml up -d
 - ICS feed URL에는 token이 query string으로 박혀 있음. 외부 공유 금지.
 - VAPID private key는 backend env에만; 절대 frontend에 노출 X.
 - 정기 보안 점검은 [`SECURITY.md`](../SECURITY.md) 참조.
+
+## Tracing (Sprint 27)
+
+The compose stack now includes a self-hosted Arize Phoenix container for
+observability of the agent loop.
+
+### Accessing the UI
+
+After `docker compose -f docker/local.compose.yml up -d`:
+
+- Phoenix UI: <http://localhost:6006> (bound to loopback only)
+- Service identifier: `tomorrow-you-backend`
+
+### Toggling tracing on/off
+
+Set in `.env`:
+
+```bash
+TOMORROW_YOU_TRACING_ENABLED=true   # or false
+```
+
+Then restart backend: `docker compose -f docker/local.compose.yml up -d backend`.
+Disabled mode incurs near-zero overhead (NoOpTracerProvider).
+
+### Wiping trace history
+
+```bash
+docker compose -f docker/local.compose.yml down phoenix
+docker volume rm $(docker volume ls -q | grep phoenix_data)
+docker compose -f docker/local.compose.yml up -d phoenix
+```
+
+### What gets traced
+
+Every chat round, tool dispatch, memory operation (recall/upsert/top_memories),
+reflection cycle, daily briefing, and Ollama LLM call produces a span. See
+`.claude/skills/tomorrow-you-tracing/SKILL.md` for the schema and conventions.
+
+### Privacy note
+
+Spans contain full user message text, model responses, and memory contents.
+The Phoenix container holds this data on a local volume (`phoenix_data`) and
+the UI is bound to `127.0.0.1` only — nothing leaves this host. If you share
+this machine or deploy beyond local, add a redaction layer before relaxing
+the bind.
