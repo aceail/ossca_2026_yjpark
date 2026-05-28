@@ -18,8 +18,28 @@ import json
 import re
 import sqlite3
 import urllib.request
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Optional
+
+from agent.tracing import trace_subsystem, trace_llm
+
+
+@contextmanager
+def _react_round_span(round_index: int):
+    """Sparse span around one ReAct iteration. Imported lazily so this
+    file stays usable without tracing installed."""
+    try:
+        from opentelemetry import trace as _trace
+        tracer = _trace.get_tracer(__name__)
+        with tracer.start_as_current_span("react.round") as span:
+            try:
+                span.set_attribute("react.round_index", round_index)
+            except Exception:
+                pass
+            yield span
+    except Exception:
+        yield None
 
 OLLAMA_CHAT_URL = "http://127.0.0.1:11434/api/chat"
 # Sprint 18: Hermes-style agent model. EXAONE은 tools API 미검증.
@@ -412,6 +432,7 @@ def _execute_actions(
     return lines
 
 
+@trace_llm
 def _call_ollama_chat(
     messages: list[dict],
     *,
@@ -515,6 +536,7 @@ def _record_message(
     return cur.lastrowid
 
 
+@trace_subsystem("chat")
 def post_user_message(
     conn: sqlite3.Connection,
     *,
@@ -572,55 +594,56 @@ def post_user_message(
     last_msg: dict = {}
 
     for _round in range(AGENT_MAX_TOOL_ROUNDS):
-        try:
-            msg = fn(messages, tools=tools) if tools else fn(messages)
-        except TypeError:
-            # 옛 시그니처 (tools 인자 미지원) — fallback
-            msg = fn(messages)
-        except Exception as exc:
-            final_content = f"(응답 생성 중 오류: {exc})"
-            break
+        with _react_round_span(_round):
+            try:
+                msg = fn(messages, tools=tools) if tools else fn(messages)
+            except TypeError:
+                # 옛 시그니처 (tools 인자 미지원) — fallback
+                msg = fn(messages)
+            except Exception as exc:
+                final_content = f"(응답 생성 중 오류: {exc})"
+                break
 
-        # 이전 모듈 시그니처(str)와 새 시그니처(dict) 모두 호환
-        if isinstance(msg, str):
-            final_content = msg
-            break
+            # 이전 모듈 시그니처(str)와 새 시그니처(dict) 모두 호환
+            if isinstance(msg, str):
+                final_content = msg
+                break
 
-        last_msg = msg if isinstance(msg, dict) else {}
-        tool_calls = msg.get("tool_calls") or []
-        if not tool_calls:
-            final_content = (msg.get("content") or "").strip()
-            break
+            last_msg = msg if isinstance(msg, dict) else {}
+            tool_calls = msg.get("tool_calls") or []
+            if not tool_calls:
+                final_content = (msg.get("content") or "").strip()
+                break
 
-        # tool 실행 + 결과를 다음 round 메시지로
-        messages.append({
-            "role": "assistant",
-            "content": msg.get("content") or "",
-            "tool_calls": tool_calls,
-        })
-        for call in tool_calls:
-            tool_calls_total += 1
-            fn_block = call.get("function") or {}
-            name = fn_block.get("name", "")
-            args = fn_block.get("arguments")
-            result = _tool_dispatch(
-                conn, user_id=sess["user_id"], name=name, arguments=args,
-            )
-            # 사용자에게 보일 간략 라인
-            if result.get("ok"):
-                if name == "create_task":
-                    action_lines.append(f"✅ '{result.get('title')}' 등록 — 마감 {result.get('deadline') or '미정'}")
-                elif name == "update_task":
-                    action_lines.append(f"✓ '{result.get('title')}' 갱신")
-                elif name == "delete_task":
-                    action_lines.append(f"⊗ '{result.get('title')}' 삭제")
-            else:
-                action_lines.append(f"⚠ {name}: {result.get('error', '실패')}")
+            # tool 실행 + 결과를 다음 round 메시지로
             messages.append({
-                "role": "tool",
-                "name": name,
-                "content": json.dumps(result, ensure_ascii=False),
+                "role": "assistant",
+                "content": msg.get("content") or "",
+                "tool_calls": tool_calls,
             })
+            for call in tool_calls:
+                tool_calls_total += 1
+                fn_block = call.get("function") or {}
+                name = fn_block.get("name", "")
+                args = fn_block.get("arguments")
+                result = _tool_dispatch(
+                    conn, user_id=sess["user_id"], name=name, arguments=args,
+                )
+                # 사용자에게 보일 간략 라인
+                if result.get("ok"):
+                    if name == "create_task":
+                        action_lines.append(f"✅ '{result.get('title')}' 등록 — 마감 {result.get('deadline') or '미정'}")
+                    elif name == "update_task":
+                        action_lines.append(f"✓ '{result.get('title')}' 갱신")
+                    elif name == "delete_task":
+                        action_lines.append(f"⊗ '{result.get('title')}' 삭제")
+                else:
+                    action_lines.append(f"⚠ {name}: {result.get('error', '실패')}")
+                messages.append({
+                    "role": "tool",
+                    "name": name,
+                    "content": json.dumps(result, ensure_ascii=False),
+                })
 
     # Sprint 24: qwen3 같은 모델은 reasoning을 thinking 필드에 분리해
     # content를 빈 채로 응답. action_lines가 있으면 그것만으로 충분; 둘 다
