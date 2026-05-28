@@ -320,6 +320,36 @@ export default function ChatPage() {
     setMessages(await fetchMessages(sid));
   };
 
+  // Sprint 26: 대화 영구 삭제. 현재 active면 다른 세션 또는 새 세션으로 전환.
+  const deleteSession = async (sid: number) => {
+    if (!userId) return;
+    if (!confirm("이 대화를 영구 삭제할까요? 메시지·기록 모두 사라져요.")) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/chat/sessions/${sid}`, {
+        method: "DELETE",
+        headers: { ...authHeaders() },
+      });
+      if (!res.ok && res.status !== 204) {
+        throw new Error(`삭제 실패 (${res.status})`);
+      }
+    } catch (e) {
+      setError((e as Error).message);
+      return;
+    }
+    const list = await fetchSessions(userId);
+    setSessions(list);
+    if (sessionId === sid) {
+      if (list.length > 0) {
+        const next = list[0];
+        setSessionId(next.id);
+        setMessages(await fetchMessages(next.id));
+      } else {
+        // 세션 0개 → 새로 자동 생성
+        ensureSession(userId);
+      }
+    }
+  };
+
   if (userLoading) {
     return (
       <main className="p-8 min-h-screen" style={{ backgroundColor: "var(--color-bg-base)" }}>
@@ -386,7 +416,7 @@ export default function ChatPage() {
                   "(빈 대화)";
                 const preview = (s.last_message ?? "").replace(/\n+/g, " ").trim();
                 return (
-                  <li key={s.id}>
+                  <li key={s.id} className="group relative">
                     <button
                       type="button"
                       onClick={() => switchSession(s.id)}
@@ -425,6 +455,23 @@ export default function ChatPage() {
                             `${s.persona_name ?? "내일의 나"} · 메시지 ${s.message_count}`}
                         </div>
                       </div>
+                    </button>
+                    {/* Sprint 26: 호버 시 삭제 버튼 */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteSession(s.id);
+                      }}
+                      aria-label={`'${title}' 대화 삭제`}
+                      className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity rounded px-1.5 py-0.5 text-[12px]"
+                      style={{
+                        color: "var(--color-text-secondary)",
+                        backgroundColor: "var(--color-bg-base)",
+                      }}
+                      title="이 대화 삭제"
+                    >
+                      ⊗
                     </button>
                   </li>
                 );

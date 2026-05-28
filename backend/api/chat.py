@@ -167,6 +167,25 @@ def trigger_briefing(
     )
 
 
+@router.delete("/sessions/{session_id}", status_code=204)
+def delete_session(
+    session_id: int,
+    conn: sqlite3.Connection = Depends(get_db),
+    token_user_id: str = Depends(resolve_user_from_token),
+) -> None:
+    """Sprint 26: chat 세션 + 모든 메시지 영구 삭제.
+
+    ChatMessage는 FK ON DELETE CASCADE로 함께 사라지고 FTS5 trigger도 동기화.
+    소유자 검증 후 삭제. 토큰 미일치는 401/403.
+    """
+    owner = _session_user_id(conn, session_id)
+    if owner is None:
+        raise HTTPException(status_code=404, detail="ChatSession not found")
+    assert_user_matches(token_user_id, owner)
+    conn.execute("DELETE FROM ChatSession WHERE id = ?", (session_id,))
+    conn.commit()
+
+
 @router.get("/sessions/{session_id}/messages", response_model=ListMessagesResponse)
 def get_messages(
     session_id: int,
