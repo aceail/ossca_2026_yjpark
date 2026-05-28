@@ -12,9 +12,18 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
-    # GPU 할당 (CDI). 호스트의 nvidia.com/gpu=N 디바이스를 컨테이너에 매핑.
-    devices:
-      - nvidia.com/gpu=${OLLAMA_GPU_ID:-all}
+    # GPU 할당 (CDI via deploy.resources). Compose v5는 top-level devices: 필드가
+    # CDI ID를 안 받으므로 deploy.resources.reservations.devices가 정공법.
+    # OLLAMA_GPU_ID로 호스트의 nvidia.com/gpu=N 인덱스 지정 (기본 0). 호스트
+    # CDI 등록 인덱스는 `docker info | grep cdi`로 확인 가능.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: cdi
+              capabilities: [gpu]
+              device_ids:
+                - nvidia.com/gpu=${OLLAMA_GPU_ID:-0}
     healthcheck:
       # ollama image lacks curl/wget; `ollama list` exits 0 once the daemon is ready.
       test: ["CMD", "ollama", "list"]
