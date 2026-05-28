@@ -189,3 +189,10 @@ body {
   opacity: 0;
   animation: fade-in 0.5s ease-out 2s forwards;
 }
+
+/* Sprint 27: BottomTabs is fixed bottom-0 (h ≈ 64px). All pages use min-h-screen
+ * which extends to viewport bottom, so the last 64px of content slides under
+ * the tab strip. Pad every page's <main> with extra space at the bottom. */
+main {
+  padding-bottom: max(5rem, calc(4rem + env(safe-area-inset-bottom)));
+}
