@@ -233,5 +233,53 @@ class TestGrowthPattern(unittest.TestCase):
         self.assertEqual(out["snapshot_growth_pattern"], "flat")
 
 
+class TestLLMCritic(unittest.TestCase):
+    def test_critic_parses_well_formed_json(self):
+        from pipeline.tendencies import llm_critic
+
+        features = {
+            "chat_count_7d": 12,
+            "avg_deadline_buffer_days": 1.4,
+            "peak_hour_histogram": [0]*13 + [4, 5, 4] + [0]*8,
+            "sharp_then_progress_ratio": 0.7,
+            "gentle_then_progress_ratio": 0.7,
+            "snapshot_growth_pattern": "late_spike",
+        }
+        chat_samples = ["오늘 보고서 마지막 챕터", "이번엔 정말 미리 하자"]
+
+        canned_response = """
+        {"tone_preference":"sharp","reaction_to_sharp":"improves",
+         "typical_deadline_buffer_days":1,"peak_work_hours":[13,14,15],
+         "confidence":{"tone_preference":0.78,"reaction_to_sharp":0.55,
+         "typical_deadline_buffer_days":0.92,"peak_work_hours":0.7}}
+        """
+        def fake_call_fn(messages, **kw):
+            return {"message": {"content": canned_response}}
+
+        out = llm_critic(features, chat_samples, call_fn=fake_call_fn)
+        self.assertEqual(out["tone_preference"], "sharp")
+        self.assertEqual(out["reaction_to_sharp"], "improves")
+        self.assertEqual(out["typical_deadline_buffer_days"], 1)
+        self.assertEqual(out["peak_work_hours"], [13, 14, 15])
+        self.assertEqual(out["confidence"]["tone_preference"], 0.78)
+
+    def test_critic_returns_empty_on_invalid_json(self):
+        from pipeline.tendencies import llm_critic
+        def bad_call_fn(messages, **kw):
+            return {"message": {"content": "I'm thinking about this..."}}
+        out = llm_critic({}, [], call_fn=bad_call_fn)
+        self.assertEqual(out, {})
+
+    def test_critic_drops_unknown_keys(self):
+        from pipeline.tendencies import llm_critic
+        def call_fn(messages, **kw):
+            return {"message": {"content":
+                '{"tone_preference":"sharp","unknown_dim":"x",'
+                '"confidence":{"tone_preference":0.5}}'}}
+        out = llm_critic({}, [], call_fn=call_fn)
+        self.assertIn("tone_preference", out)
+        self.assertNotIn("unknown_dim", out)
+
+
 if __name__ == "__main__":
     unittest.main()

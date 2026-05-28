@@ -17,9 +17,10 @@ Read path (called from followup loop):
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Callable, Optional
 
 from agent.tracing import trace_subsystem
 
@@ -204,6 +205,103 @@ def _extract_snapshot_growth_pattern(
     if counted == 0:
         return None
     return max(votes.items(), key=lambda kv: kv[1])[0]
+
+
+CallFn = Callable[..., dict]
+
+_QUAL_ENUMS = {
+    "tone_preference": {"quiet", "witty", "sharp", "savage"},
+    "reaction_to_sharp": {"improves", "shuts_down", "neutral"},
+}
+_QUAL_KEYS = (
+    "tone_preference",
+    "reaction_to_sharp",
+    "typical_deadline_buffer_days",
+    "peak_work_hours",
+)
+
+
+def _critic_prompt(features: dict, chat_samples: list[str]) -> list[dict]:
+    schema_hint = (
+        '{"tone_preference":"quiet|witty|sharp|savage",'
+        '"reaction_to_sharp":"improves|shuts_down|neutral",'
+        '"typical_deadline_buffer_days":<int>,'
+        '"peak_work_hours":<list[int]>,'
+        '"confidence":{"tone_preference":<0..1>,'
+        '"reaction_to_sharp":<0..1>,'
+        '"typical_deadline_buffer_days":<0..1>,'
+        '"peak_work_hours":<0..1>}}'
+    )
+    system = (
+        "당신은 사용자 행동을 분석하는 평가자입니다. "
+        "통계 + 최근 채팅 샘플로 아래 JSON 한 줄을 만드세요. "
+        "다른 텍스트 일체 금지. 통계가 null인 차원은 confidence를 낮게."
+    )
+    user = (
+        f"[측정값]\n{json.dumps(features, ensure_ascii=False)}\n\n"
+        f"[채팅 샘플]\n" + "\n---\n".join(chat_samples[:10]) + "\n\n"
+        f"[schema]\n{schema_hint}"
+    )
+    return [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user},
+    ]
+
+
+def _parse_critic_json(raw: str) -> dict:
+    """Extract the first {...} block, json-load, and whitelist keys."""
+    if not raw:
+        return {}
+    start = raw.find("{")
+    end = raw.rfind("}")
+    if start == -1 or end <= start:
+        return {}
+    try:
+        parsed = json.loads(raw[start : end + 1])
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    out: dict = {}
+    for k in _QUAL_KEYS:
+        if k not in parsed:
+            continue
+        v = parsed[k]
+        if k in _QUAL_ENUMS and v not in _QUAL_ENUMS[k]:
+            continue
+        out[k] = v
+    confidence = parsed.get("confidence") or {}
+    if isinstance(confidence, dict):
+        out["confidence"] = {
+            k: float(v)
+            for k, v in confidence.items()
+            if k in _QUAL_KEYS and isinstance(v, (int, float))
+            and 0 <= float(v) <= 1
+        }
+    return out
+
+
+def llm_critic(
+    features: dict,
+    chat_samples: list[str],
+    *,
+    call_fn: Optional[CallFn] = None,
+) -> dict:
+    """Ask qwen3:8b for qualitative dims + confidences. Returns {} on failure.
+
+    `call_fn` defaults to pipeline.chat._call_ollama_chat. Tests inject a
+    fake call_fn so no Ollama is required.
+    """
+    if call_fn is None:
+        from pipeline.chat import _call_ollama_chat
+        call_fn = _call_ollama_chat
+    messages = _critic_prompt(features, chat_samples)
+    try:
+        result = call_fn(messages, model=None, temperature=0.0, num_predict=400)
+    except Exception:
+        return {}
+    raw = (result or {}).get("message", {}).get("content", "") or ""
+    return _parse_critic_json(raw)
 
 
 @trace_subsystem("tendencies")
