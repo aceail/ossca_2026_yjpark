@@ -294,5 +294,46 @@ class TestLLMCritic(unittest.TestCase):
         self.assertEqual(received_kwargs["num_predict"], 400)
 
 
+class TestMerge(unittest.TestCase):
+    def test_merge_writes_version_at_and_both_subtrees(self):
+        from pipeline.tendencies import merge
+        features = {"chat_count_7d": 5, "avg_deadline_buffer_days": 1.4,
+                    "peak_hour_histogram": [0]*24,
+                    "sharp_then_progress_ratio": None,
+                    "gentle_then_progress_ratio": None,
+                    "snapshot_growth_pattern": "flat"}
+        critic = {"tone_preference": "sharp",
+                  "reaction_to_sharp": "improves",
+                  "typical_deadline_buffer_days": 1,
+                  "peak_work_hours": [13, 14],
+                  "confidence": {"tone_preference": 0.8}}
+        now = datetime(2026, 5, 28, 12, 0, 0, tzinfo=timezone.utc)
+        out = merge(features, critic, now=now)
+        self.assertEqual(out["version_at"], "2026-05-28T12:00:00+00:00")
+        self.assertEqual(out["raw_features"], features)
+        self.assertEqual(out["qualitative"]["tone_preference"], "sharp")
+        self.assertEqual(out["confidence"]["tone_preference"], 0.8)
+
+    def test_merge_default_confidence_zero_for_missing_dims(self):
+        from pipeline.tendencies import merge
+        out = merge({}, {}, now=datetime(2026, 5, 28, tzinfo=timezone.utc))
+        self.assertEqual(out["qualitative"], {})
+        self.assertEqual(out["confidence"], {})
+
+    def test_merge_critic_only_qualitative(self):
+        """Heuristic-first numeric / critic-only qualitative."""
+        from pipeline.tendencies import merge
+        features = {"avg_deadline_buffer_days": 2.0}
+        critic = {"typical_deadline_buffer_days": 99,
+                  "tone_preference": "savage",
+                  "confidence": {"tone_preference": 0.9,
+                                 "typical_deadline_buffer_days": 0.3}}
+        out = merge(features, critic, now=datetime(2026, 5, 28, tzinfo=timezone.utc))
+        # qualitative.typical_deadline_buffer_days comes from critic (qualitative subtree)
+        self.assertEqual(out["qualitative"]["typical_deadline_buffer_days"], 99)
+        # raw_features still has the heuristic value
+        self.assertEqual(out["raw_features"]["avg_deadline_buffer_days"], 2.0)
+
+
 if __name__ == "__main__":
     unittest.main()

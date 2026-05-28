@@ -304,6 +304,31 @@ def llm_critic(
     return _parse_critic_json(raw)
 
 
+def merge(
+    features: dict,
+    critic: dict,
+    *,
+    now: Optional[datetime] = None,
+) -> dict:
+    """Combine heuristic features and LLM critic output into the JSON
+    persisted under UserMemory['adaptive_tendencies']."""
+    _now = now or datetime.now(timezone.utc)
+    qualitative: dict = {}
+    for k in _QUAL_KEYS:
+        if k in critic:
+            qualitative[k] = critic[k]
+    confidence: dict = {}
+    for k, v in (critic.get("confidence") or {}).items():
+        if k in _QUAL_KEYS:
+            confidence[k] = v
+    return {
+        "version_at": _now.isoformat(),
+        "raw_features": dict(features),
+        "qualitative": qualitative,
+        "confidence": confidence,
+    }
+
+
 @trace_subsystem("tendencies")
 def extract_features(
     conn: sqlite3.Connection,
