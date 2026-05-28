@@ -1,0 +1,47 @@
+# Heavy / dev-only paths excluded from docker build context.
+# Without this, the build context was ~38GB (mostly ollama_models/).
+# Sprint 27: added to fix slow rebuilds discovered during smoke test.
+
+# Local model cache (managed by the ollama compose service via its own volume)
+ollama_models/
+
+# User database snapshots stored on the host (compose mounts /data volume separately)
+tomorrow_you.db
+tomorrow_you.db-journal
+tomorrow_you.db-shm
+tomorrow_you.db-wal
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+
+# Python build / test artifacts
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# Node / Next.js build artifacts (frontend rebuilds inside its own stage)
+frontend/.next/
+frontend/node_modules/
+frontend/.omc/
+
+# Editor & OS junk
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Repo metadata / superpowers state
+.git/
+.github/
+.omc/
+.claude/
+
+# Docs not needed at runtime (the runtime container doesn't serve them)
+docs/superpowers/
