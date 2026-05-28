@@ -3,7 +3,10 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 COPY frontend/package*.json /app/
-RUN npm ci --omit=dev
+# Include devDependencies — Tailwind v4 + @tailwindcss/postcss are devDeps but
+# required at `next build` time. Runtime container only copies .next + node_modules
+# from the builder, so the extra weight is contained to a single layer.
+RUN npm ci
 
 FROM node:20-alpine AS builder
 WORKDIR /app
