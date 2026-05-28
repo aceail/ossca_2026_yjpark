@@ -50,15 +50,20 @@ to a self-hosted Arize Phoenix container. Spans are toggled by
 - Disable tracing temporarily: set `TOMORROW_YOU_TRACING_ENABLED=false` and
   restart the backend.
 
-## Future hook for sub-project ② Eval Harness
+## Sprint 29 Eval Harness
 
 The trace schema is shaped so that one trace ≈ one eval-harness example. The
-extractor (to be designed in sub-project ②) will:
+eval harness extracts traces via Phoenix REST API and converts them to scenario
+JSON files for deterministic evaluation.
 
-1. Pull a trace from Phoenix via its REST API or local SQLite.
-2. Walk the span tree to collect `chat.post_user_message` (input) → `llm.call` 
-   (model invocation) → `tool.*` results → final response stored in DB.
-3. Emit a JSONL row containing those four parts.
+**Key implementation files**:
+- `eval/cli.py` — Command-line interface with three subcommands:
+  - `export-phoenix` — Extract traces from Phoenix and convert to scenarios
+  - `run-scenarios` — Run chat agent against a scenario file
+  - `score-only` — Score actual output against expected output
+- `eval/phoenix_export.py` — Trace → scenarios converter
+- `eval/runner_sprint29.py` — Chat agent orchestrator for evaluation
+- `eval/metrics_hermes.py` — Deterministic scoring (no LLM)
 
 Do not change span names or attribute keys without updating that extractor and
 the schema doc in this file.
@@ -82,3 +87,19 @@ Storage convention:
   `docs/superpowers/specs/2026-05-28-adaptive-self-learning-loop-design.md` §5.
 - Confidence threshold for *acting* on a dim is 0.3. Below that, behavior
   falls back to persona/static defaults.
+
+## Eval Harness (Sprint 29)
+
+The trace extractor (`eval/phoenix_export.py`) walks Phoenix span trees and
+emits scenario rows for the chat-agent eval harness. Use the CLI:
+
+```bash
+# Export latest 100 traces from Phoenix
+python -m eval.cli export-phoenix --url http://localhost:6006 --output eval/scenarios/phoenix.json
+
+# Run curated 8 golden scenarios
+python -m eval.cli run-scenarios eval/scenarios/sprint29.json --json-summary
+```
+
+If you change span names or attribute keys here, update the extractor
+(`eval/phoenix_export.py`) and the eval scenarios so the metrics still bind.

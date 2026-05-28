@@ -163,3 +163,23 @@ The Phoenix container holds this data on a local volume (`phoenix_data`) and
 the UI is bound to `127.0.0.1` only — nothing leaves this host. If you share
 this machine or deploy beyond local, add a redaction layer before relaxing
 the bind.
+
+## Eval Harness (Sprint 29)
+
+### Quick run
+
+```bash
+# 1. Export the latest 100 traces from Phoenix as scenarios
+python -m eval.cli export-phoenix --url http://localhost:6006 --output eval/scenarios/phoenix.json --limit 100
+
+# 2. Run the curated 8 sample scenarios against the agent
+python -m eval.cli run-scenarios eval/scenarios/sprint29.json --json-summary
+```
+
+### Files
+
+- `eval/scenarios/sprint29.json` — 8 curated golden scenarios
+- `eval/metrics_hermes.py` — deterministic scoring (no LLM)
+- `eval/phoenix_export.py` — Phoenix REST → scenarios
+- `eval/runner_sprint29.py` — orchestrator (post_user_message → score)
+- `eval/cli.py` — argparse entry
