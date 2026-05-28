@@ -1,0 +1,96 @@
+[
+  {
+    "id": "create-task-deadline",
+    "description": "사용자가 마감 있는 새 작업 등록",
+    "user_input": "5월 31일까지 발표자료 만들어야해",
+    "expected_actions": [
+      {
+        "type": "create_task",
+        "title_contains": "발표자료",
+        "deadline_starts_with": "2026-05-31"
+      }
+    ]
+  },
+  {
+    "id": "create-task-no-deadline",
+    "description": "마감 없는 작업 등록",
+    "user_input": "일일 일정 정리 작업 등록해줘",
+    "expected_actions": [
+      {
+        "type": "create_task",
+        "title_contains": "일일 일정 정리"
+      }
+    ]
+  },
+  {
+    "id": "create-task-with-folder",
+    "description": "작업과 폴더를 동시에 등록",
+    "user_input": "프로젝트 기획 작업 만들고 폴더는 ~/work로 해줘",
+    "expected_actions": [
+      {
+        "type": "create_task",
+        "title_contains": "프로젝트 기획",
+        "folder_contains": "~/work"
+      }
+    ]
+  },
+  {
+    "id": "set-folder-existing",
+    "description": "기존 작업의 폴더 설정",
+    "user_input": "발표자료 폴더는 ~/Desktop으로",
+    "expected_actions": [
+      {
+        "type": "update_task_folder",
+        "title_contains": "발표자료",
+        "folder_contains": "~/Desktop"
+      }
+    ]
+  },
+  {
+    "id": "update-status-done",
+    "description": "작업 완료 처리",
+    "user_input": "발표자료 다 했어",
+    "expected_actions": [
+      {
+        "type": "update_task_status",
+        "title_contains": "발표자료",
+        "status_equals": "done"
+      }
+    ]
+  },
+  {
+    "id": "update-deadline",
+    "description": "작업 마감 변경",
+    "user_input": "발표자료 마감 6월 15일로 바꿔",
+    "expected_actions": [
+      {
+        "type": "update_task_deadline",
+        "title_contains": "발표자료",
+        "deadline_starts_with": "2026-06-15"
+      }
+    ]
+  },
+  {
+    "id": "update-title",
+    "description": "작업 제목 변경",
+    "user_input": "발표자료 이름을 OSSCA 발표로 바꿔",
+    "expected_actions": [
+      {
+        "type": "update_task_title",
+        "title_contains": "OSSCA 발표"
+      }
+    ]
+  },
+  {
+    "id": "relative-day",
+    "description": "상대 시간 마감 설정",
+    "user_input": "내일까지 보고서 끝내야해",
+    "expected_actions": [
+      {
+        "type": "create_task",
+        "title_contains": "보고서",
+        "relative_deadline_offset": 1
+      }
+    ]
+  }
+]
