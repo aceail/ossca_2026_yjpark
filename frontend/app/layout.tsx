@@ -55,7 +55,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <ServiceWorkerRegister />
-        <div className="flex flex-col flex-1 w-full max-w-screen-lg mx-auto px-6 sm:px-10 pb-16 md:pb-0">
+        <div className="flex flex-col flex-1 w-full max-w-screen-lg mx-auto px-6 sm:px-10 pb-16">
           {children}
         </div>
         <BottomTabs />

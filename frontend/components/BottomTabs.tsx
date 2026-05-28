@@ -4,8 +4,9 @@ import React from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 
-// 모바일에서만 노출 (md:hidden). 4개 탭: Chat / Tasks / Calendar / Settings.
-// PWA standalone 모드에서도 잠금 화면 알림 클릭 시 자연스럽게 이동 가능.
+// 4개 탭: Chat / Tasks / Calendar / Settings.
+// 모바일·데스크톱 모두 표시. PWA standalone 모드에서도 잠금 화면 알림 클릭 시
+// 자연스럽게 이동 가능.
 
 interface TabDef {
   href: string;
@@ -28,7 +29,7 @@ export function BottomTabs() {
   return (
     <nav
       aria-label="주요 탭"
-      className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex justify-around"
+      className="fixed bottom-0 left-0 right-0 z-30 flex justify-around"
       style={{
         backgroundColor: "var(--color-bg-card)",
         borderTop: "1px solid var(--color-border-subtle)",
