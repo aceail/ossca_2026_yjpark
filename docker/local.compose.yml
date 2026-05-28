@@ -1,12 +1,5 @@
 # Local 모드 운영용 docker-compose.
-# 같은 머신에 Ollama·SQLite·우리 backend·frontend 한 번에 띄움.
-#
-# 사용:
-#   cp .env.example .env  + 키 채움
-#   cp frontend/.env.example frontend/.env.local + 채움
-#   docker compose -f docker/local.compose.yml --env-file .env up -d
-#
-# Note: Ollama는 GPU 또는 큰 RAM 필요 — 모델은 ollama_data 볼륨에 캐시.
+# 같은 머신에 Ollama·SQLite·우리 backend·frontend + Sprint 27 Phoenix 한 번에 띄움.
 
 version: "3.9"
 
@@ -25,6 +18,19 @@ services:
       timeout: 5s
       retries: 5
 
+  phoenix:
+    # Sprint 27: Agent Trace Console. Self-hosted Arize Phoenix.
+    image: arizephoenix/phoenix:latest
+    container_name: naeil-phoenix
+    restart: unless-stopped
+    ports:
+      # Loopback bind only — UI is for the developer on this host.
+      - "127.0.0.1:6006:6006"
+    volumes:
+      - phoenix_data:/data
+    environment:
+      PHOENIX_WORKING_DIR: /data
+
   backend:
     build:
       context: ..
@@ -34,6 +40,8 @@ services:
     depends_on:
       ollama:
         condition: service_healthy
+      phoenix:
+        condition: service_started
     environment:
       TOMORROW_YOU_DB: /data/tomorrow_you.db
       NAEIL_AGENT_MODEL: ${NAEIL_AGENT_MODEL:-qwen3:8b}
@@ -45,8 +53,12 @@ services:
       NAEIL_VAPID_PRIVATE_KEY: ${NAEIL_VAPID_PRIVATE_KEY:-}
       NAEIL_VAPID_SUBJECT: ${NAEIL_VAPID_SUBJECT:-mailto:admin@example.com}
       TOMORROW_YOU_FERNET_PASSPHRASE: ${TOMORROW_YOU_FERNET_PASSPHRASE:-}
-      # Ollama 컨테이너로 라우트
       OLLAMA_HOST: http://ollama:11434
+      # Sprint 27: tracing
+      TOMORROW_YOU_TRACING_ENABLED: ${TOMORROW_YOU_TRACING_ENABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://phoenix:6006/v1/traces
+      OTEL_SERVICE_NAME: tomorrow-you-backend
+      TOMORROW_YOU_ENV: ${TOMORROW_YOU_ENV:-dev}
     volumes:
       - naeil_data:/data
     ports:
@@ -69,3 +81,4 @@ services:
 volumes:
   ollama_data:
   naeil_data:
+  phoenix_data:
