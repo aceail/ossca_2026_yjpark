@@ -15,7 +15,7 @@ from backend.schemas import (
     CreateUserResponse,
     UserProfileResponse,
 )
-from backend.deps import get_db, require_token
+from backend.deps import get_db, require_token, assert_user_matches, resolve_user_from_token
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -105,9 +105,10 @@ def set_notification_prefs(
     user_id: str,
     body: dict = Body(...),
     conn: sqlite3.Connection = Depends(get_db),
-    _auth: str = Depends(require_token),
+    token_user_id: str = Depends(resolve_user_from_token),
 ) -> dict:
     """notification_prefs를 UserMemory에 upsert. Sprint 39: quiet hours + max/day."""
+    assert_user_matches(token_user_id, user_id)
     import json as _j
     from pipeline.memory import upsert_memory
     keep = {
