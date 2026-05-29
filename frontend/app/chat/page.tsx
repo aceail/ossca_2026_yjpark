@@ -126,6 +126,22 @@ function daysUntilLabel(iso: string | null): string {
   return `${Math.abs(d)}일 지남`;
 }
 
+function cardDeepLink(icon: string, text: string): string {
+  // try to extract a task id from text
+  const m = text.match(/#(\d+)|id=(\d+)|task[\s_]?(\d+)/i);
+  const tid = m ? (m[1] || m[2] || m[3]) : null;
+  const focus = tid ? `?focus=${tid}` : "";
+  switch (icon) {
+    case "📅": return "/calendar";
+    case "⚠": return "/settings";
+    case "✅":
+    case "✓":
+    case "📁":
+    case "✏":
+    default: return `/tasks${focus}`;
+  }
+}
+
 export default function ChatPage() {
   const { userId, loading: userLoading } = useUser();
 
@@ -588,35 +604,50 @@ export default function ChatPage() {
                           return rec ? <RecoveryCardCluster key="recovery" data={rec} /> : null;
                         })()}
                         {/* Action 카드 (assistant만) */}
-                        {parsed?.cards.map((c, i) => (
-                          <div
-                            key={i}
-                            className="flex items-center gap-2 rounded-xl px-3 py-2"
-                            style={{
-                              backgroundColor: c.icon === "⚠"
-                                ? "var(--color-softstop-bg)"
-                                : "var(--color-recovery-bg)",
-                              border: `1px solid ${
-                                c.icon === "⚠"
-                                  ? "var(--color-softstop-border)"
-                                  : "var(--color-recovery-border)"
-                              }`,
-                            }}
-                          >
-                            <span aria-hidden className="text-[16px] flex-shrink-0">
-                              {c.icon}
-                            </span>
-                            <span
-                              className="text-[13px]"
+                        {parsed?.cards.map((c, i) => {
+                          const href = cardDeepLink(c.icon, c.text);
+                          return (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => { window.location.href = href; }}
+                              className="card-mount flex items-center justify-between gap-3 rounded-xl px-3 py-2 group transition-transform duration-100 active:scale-[0.97] text-left w-full"
                               style={{
-                                fontFamily: "var(--font-feeling)",
-                                color: "var(--color-text-primary)",
+                                backgroundColor: c.icon === "⚠"
+                                  ? "var(--color-softstop-bg)"
+                                  : "var(--color-recovery-bg)",
+                                border: `1px solid ${
+                                  c.icon === "⚠"
+                                    ? "var(--color-softstop-border)"
+                                    : "var(--color-recovery-border)"
+                                }`,
                               }}
+                              aria-label={`${c.text} 이동`}
                             >
-                              {c.text}
-                            </span>
-                          </div>
-                        ))}
+                              <span className="flex items-center gap-2 min-w-0">
+                                <span aria-hidden className="text-[16px] flex-shrink-0">
+                                  {c.icon}
+                                </span>
+                                <span
+                                  className="text-[13px] truncate"
+                                  style={{
+                                    fontFamily: "var(--font-feeling)",
+                                    color: "var(--color-text-primary)",
+                                  }}
+                                >
+                                  {c.text}
+                                </span>
+                              </span>
+                              <span
+                                aria-hidden
+                                className="text-[12px] opacity-40 group-hover:opacity-80 group-hover:translate-x-0.5 transition-all duration-150 flex-shrink-0"
+                                style={{ color: "var(--color-recovery-accent)" }}
+                              >
+                                →
+                              </span>
+                            </button>
+                          );
+                        })}
                         {/* 본문 (있을 때만) */}
                         {(isUser || (parsed && parsed.body)) && (
                           <div
