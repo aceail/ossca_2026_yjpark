@@ -6,8 +6,9 @@
      Serif(fact)는 한국어 가독성을 위해 weight 500 + line 1.7.
      Sans(feeling)는 모든 UI 본문·헤더 — 한국어 기본 16px.
   */
-  --font-fact: var(--font-fact-loaded), "Noto Serif KR", "Georgia", serif;
-  --font-feeling: var(--font-feeling-loaded), "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
+  /* Sprint 36: next/font/google 제거 후 시스템 한글 폰트 우선 chain */
+  --font-fact: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Serif KR", "Georgia", serif;
+  --font-feeling: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
 
   --text-fact-size: 19px;
   --text-fact-line: 1.7;

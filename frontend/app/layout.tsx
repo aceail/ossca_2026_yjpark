@@ -1,22 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Noto_Serif_KR, Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
 import { BottomTabs } from "../components/BottomTabs";
 import { ServiceWorkerRegister } from "../components/ServiceWorkerRegister";
 
-const serif = Noto_Serif_KR({
-  subsets: ["latin"],
-  variable: "--font-fact-loaded",
-  weight: ["400", "600"],
-  display: "swap",
-});
-
-const sans = Noto_Sans_KR({
-  subsets: ["latin"],
-  variable: "--font-feeling-loaded",
-  weight: ["400", "500", "700"],
-  display: "swap",
-});
+// Sprint 36: next/font/google의 Noto_Serif/Sans_KR + subsets:["latin"] 조합은
+// 한글 글리프를 안 받아오면서도 폰트 파일을 다운로드해 FCP를 늦췄다. 한국어
+// 시스템 폰트(Apple SD Gothic Neo / Malgun Gothic / Noto CJK)가 우수하니
+// 웹 폰트 다운로드 제거하고 globals.css의 fallback chain에 맡긴다.
 
 export const metadata: Metadata = {
   title: "내일의 너 — Tomorrow's You",
@@ -51,7 +41,7 @@ export default function RootLayout({
   return (
     <html
       lang="ko"
-      className={`${serif.variable} ${sans.variable} h-full antialiased`}
+      className="h-full antialiased"
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <ServiceWorkerRegister />

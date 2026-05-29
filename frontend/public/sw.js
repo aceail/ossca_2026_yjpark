@@ -1,7 +1,7 @@
 // Wave 5: 서비스 워커 — offline 캐시 (stale-while-revalidate) + Wave 6 push handler stub.
 // 외부 라이브러리 없이 stdlib만 (OSS 정렬).
 
-const CACHE_NAME = "naeil-v12";  // Sprint 35 — create new docx/xlsx/pptx/md/txt from template
+const CACHE_NAME = "naeil-v14";  // Sprint 36 — HTML network-first + font fallback fix
 const APP_SHELL = ["/", "/chat", "/tasks", "/calendar", "/settings", "/personas", "/icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -20,23 +20,37 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Stale-while-revalidate for GET; bypass for API calls (auth headers).
+// Sprint 36: HTML 페이지는 network-first (SSR/RSC + Next.js 빌드별 chunk hash
+// 변경 때문에 stale HTML이 사용자에게 가면 chunk 404 → 페이지가 깨짐).
+// 정적 자산은 cache-first (Next.js가 chunk filename에 hash 박아서 안전).
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.pathname.startsWith("/api/")) return;  // API는 캐시 안 함
 
+  const isDoc = req.mode === "navigate" || req.destination === "document";
+  if (isDoc) {
+    event.respondWith(
+      fetch(req).catch(async () => {
+        const cache = await caches.open(CACHE_NAME);
+        return (await cache.match(req)) || (await cache.match("/")) || Response.error();
+      }),
+    );
+    return;
+  }
+
   event.respondWith(
     caches.open(CACHE_NAME).then(async (cache) => {
       const cached = await cache.match(req);
-      const networkFetch = fetch(req)
-        .then((res) => {
-          if (res.ok && res.type === "basic") cache.put(req, res.clone());
-          return res;
-        })
-        .catch(() => cached);
-      return cached || networkFetch;
+      if (cached) return cached;
+      try {
+        const fresh = await fetch(req);
+        if (fresh.ok && fresh.type === "basic") cache.put(req, fresh.clone());
+        return fresh;
+      } catch {
+        return cached || Response.error();
+      }
     }),
   );
 });
