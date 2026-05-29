@@ -245,26 +245,63 @@ def _apply_time_regex_to_recent_tasks(conn, user_id: str, user_message: str, now
 
 
 def _build_temporal_hints(user_message: str, conn=None, user_id: str = "") -> str:
-    """Sprint 25 + 40: 현재 시각 + open task 마감 hint. LLM의 시간 환각 방지.
+    """Sprint 25 + 40: 한국어 상대 날짜 키워드 → 절대 날짜 매핑 + 현재 시각 + open task 마감.
 
-    Includes:
-    - 현재 시각 (KST)
-    - Open task 마감 시간 (최대 3건)
-    - 강력한 지시: 절대 직접 계산하지 말고 위 값만 verbatim 사용
+    user_message에 상대 시간 키워드(오늘/내일/모레/이번주/다음주/요일 등)가 있을 때만 hint를
+    반환. 키워드 없으면 빈 문자열 (Sprint 25 약속 유지).
+
+    추가로 conn+user_id가 있고 키워드가 있으면 open task 마감 hint도 함께.
     """
-    from datetime import timedelta as _timedelta
-    _KST = timezone(_timedelta(hours=9))
+    if not user_message:
+        return ""
+    from datetime import timedelta
+
+    _KST = timezone(timedelta(hours=9))
     now_utc = datetime.now(timezone.utc)
     now_kst = now_utc.astimezone(_KST)
+    today = now_kst.date()
 
-    parts = [
-        "",
-        "[시간 hint — 답변에 시간/남은 시간 언급할 땐 절대 직접 계산하지 말고",
-        " 아래 값만 그대로 복사해서 출력. 환각 금지.]",
-        f"- 현재: {now_kst.strftime('%Y-%m-%d %H:%M')} KST ({_KO_WEEKDAY[now_kst.weekday()]}요일)",
-    ]
+    _WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"]
 
-    # open task 마감 hint (최대 3건)
+    mappings: list[str] = []
+
+    # 절대-날짜 매핑
+    if "오늘" in user_message:
+        mappings.append(f"오늘 = {today.isoformat()}")
+    if "내일" in user_message:
+        mappings.append(f"내일 = {(today + timedelta(days=1)).isoformat()}")
+    if "모레" in user_message:
+        mappings.append(f"모레 = {(today + timedelta(days=2)).isoformat()}")
+    if "글피" in user_message:
+        mappings.append(f"글피 = {(today + timedelta(days=3)).isoformat()}")
+    if "이번주" in user_message:
+        days_until_sunday = (6 - today.weekday()) % 7
+        end_of_week = today + timedelta(days=days_until_sunday)
+        mappings.append(f"이번주 끝 = {end_of_week.isoformat()}")
+    if "다음주" in user_message:
+        days_until_monday = (7 - today.weekday()) % 7 or 7
+        next_monday = today + timedelta(days=days_until_monday)
+        mappings.append(f"다음주 시작 = {next_monday.isoformat()}")
+        m = re.search(r"다음주\s*(월|화|수|목|금|토|일)", user_message)
+        if m:
+            day_idx = _WEEKDAYS.index(m.group(1))
+            target = next_monday + timedelta(days=day_idx)
+            mappings.append(f"다음 {m.group(1)}요일 = {target.isoformat()}")
+
+    # 단독 요일 (다음주 prefix 없이) — 다가오는 그 요일
+    weekday_pattern = re.search(r"(?<![다이번])주?\s*(월|화|수|목|금|토|일)요일", user_message)
+    if weekday_pattern and "다음주" not in user_message[: weekday_pattern.start()]:
+        wd = weekday_pattern.group(1)
+        day_idx = _WEEKDAYS.index(wd)
+        days_ahead = (day_idx - today.weekday()) % 7 or 7
+        target = today + timedelta(days=days_ahead)
+        mappings.append(f"다음 {wd}요일 = {target.isoformat()}")
+
+    if not mappings:
+        return ""
+
+    # Sprint 40 augmentation: open task 마감 hint (conn+user_id 있을 때만)
+    deadline_hints: list[str] = []
     if conn is not None and user_id:
         try:
             rows = conn.execute(
@@ -287,15 +324,25 @@ def _build_temporal_hints(user_message: str, conn=None, user_id: str = "") -> st
                         hrs = sec // 3600
                         mins = (sec % 3600) // 60
                         rem = f"{hrs}h {mins}min 남음"
-                    parts.append(
-                        f"- 마감 \"{r['title']}\": {dl_kst.strftime('%Y-%m-%d %H:%M')} KST ({rem})"
+                    deadline_hints.append(
+                        f"  - 마감 \"{r['title']}\": {dl_kst.strftime('%Y-%m-%d %H:%M')} KST ({rem})"
                     )
                 except (ValueError, TypeError):
                     continue
         except Exception:
             pass
 
-    parts.append("")
+    parts = [
+        "",
+        "[시간 hint — 강제 매핑. 답변에 절대 직접 계산하지 말고 아래 값만 verbatim 사용.]",
+        f"- 현재 시각: {now_kst.strftime('%Y-%m-%d %H:%M')} KST ({_WEEKDAYS[now_kst.weekday()]}요일)",
+    ]
+    for m in mappings:
+        parts.append(f"- {m}")
+    if deadline_hints:
+        parts.append("- 열린 작업 마감:")
+        parts.extend(deadline_hints)
+
     return "\n".join(parts)
 
 
