@@ -1,7 +1,7 @@
 // Wave 5: 서비스 워커 — offline 캐시 (stale-while-revalidate) + Wave 6 push handler stub.
 // 외부 라이브러리 없이 stdlib만 (OSS 정렬).
 
-const CACHE_NAME = "naeil-v19";  // Sprint 38 — in-page diagnostic log for edit page
+const CACHE_NAME = "naeil-v20";  // Sprint 39 — push notification action handler
 const APP_SHELL = ["/", "/chat", "/tasks", "/calendar", "/settings", "/personas", "/icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -73,14 +73,47 @@ self.addEventListener("push", (event) => {
   );
 });
 
+// Sprint 39: notification click handler. action button 처리 + click 보고.
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || "/chat";
+  const data = (event.notification.data || {});
+  const nid = data.notification_id || null;
+  const action = event.action || "";
+
+  if (action.startsWith("done:")) {
+    const taskId = action.slice(5);
+    event.waitUntil(
+      fetch(`/api/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "done" }),
+      })
+        .catch(() => {})
+        .then(() => reportClick(nid, "done"))
+    );
+    return;
+  }
+  if (action.startsWith("snooze:")) {
+    event.waitUntil(
+      fetch(`/api/push/${nid}/snooze`, { method: "POST" })
+        .catch(() => {})
+        .then(() => reportClick(nid, "snooze"))
+    );
+    return;
+  }
   event.waitUntil(
-    self.clients.matchAll({ type: "window" }).then((clients) => {
-      const existing = clients.find((c) => c.url.endsWith(url));
-      if (existing) return existing.focus();
-      return self.clients.openWindow(url);
-    }),
+    Promise.all([
+      reportClick(nid, "open"),
+      self.clients.openWindow(data.url || "/"),
+    ])
   );
 });
+
+function reportClick(nid, action) {
+  if (!nid) return Promise.resolve();
+  return fetch(`/api/push/${nid}/clicked`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action }),
+  }).catch(() => {});
+}
