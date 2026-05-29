@@ -16,6 +16,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 os.environ["TOMORROW_YOU_OO_JWT_SECRET"] = "test-secret-32bytes-long-please-x"
 os.environ["TOMORROW_YOU_OO_PUBLIC_URL"] = "http://localhost:8090"
 os.environ["TOMORROW_YOU_BACKEND_INTERNAL_URL"] = "http://backend:8001"
+os.environ["TOMORROW_YOU_OO_INTERNAL_URL"] = "http://onlyoffice"
 
 from fastapi.testclient import TestClient
 
@@ -166,6 +167,30 @@ class TestOoDocEndpoint(unittest.TestCase):
     def test_doc_rejects_invalid_token(self):
         r = client.get("/api/_oo/doc?t=garbage")
         self.assertEqual(r.status_code, 401)
+
+
+class TestOoCallbackUrlRewrite(unittest.TestCase):
+    """OnlyOffice가 보낸 callback url의 외부 host를 docker internal로 치환."""
+
+    def test_rewrites_localhost_8090_to_onlyoffice(self):
+        from backend.api.onlyoffice import _rewrite_oo_callback_url
+        u = "http://localhost:8090/cache/files/data/key/output.docx"
+        self.assertEqual(
+            _rewrite_oo_callback_url(u),
+            "http://onlyoffice/cache/files/data/key/output.docx",
+        )
+
+    def test_preserves_unrelated_urls(self):
+        from backend.api.onlyoffice import _rewrite_oo_callback_url
+        u = "http://otherhost:8090/cache/x"
+        self.assertEqual(_rewrite_oo_callback_url(u), u)
+
+    def test_handles_exact_public_url(self):
+        from backend.api.onlyoffice import _rewrite_oo_callback_url
+        self.assertEqual(
+            _rewrite_oo_callback_url("http://localhost:8090"),
+            "http://onlyoffice",
+        )
 
 
 class TestOoCallback(unittest.TestCase):

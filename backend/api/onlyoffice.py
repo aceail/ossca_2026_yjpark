@@ -57,6 +57,27 @@ def _backend_internal_url() -> str:
     return os.environ.get("TOMORROW_YOU_BACKEND_INTERNAL_URL", "http://backend:8001").rstrip("/")
 
 
+def _oo_internal_url() -> str:
+    """docker network 내부에서 OnlyOffice에 접근할 URL (callback host 치환용)."""
+    return os.environ.get("TOMORROW_YOU_OO_INTERNAL_URL", "http://onlyoffice").rstrip("/")
+
+
+def _rewrite_oo_callback_url(url: str) -> str:
+    """OnlyOffice가 보낸 callback url의 host:port를 docker internal로 변환.
+
+    OnlyOffice는 자기 외부 URL(예: http://localhost:8090/cache/...)을 callback에
+    넣어 보내는데, backend 컨테이너 입장에서 localhost는 자기 자신이라 연결 거부.
+    public URL prefix를 internal URL로 치환.
+    """
+    public = _oo_public_url()
+    internal = _oo_internal_url()
+    if url.startswith(public + "/"):
+        return internal + url[len(public):]
+    if url == public:
+        return internal
+    return url
+
+
 def _sign_edit_token(*, user_id: str, task_id: int, filename: str) -> str:
     payload = {
         "kind": "edit",
@@ -210,9 +231,12 @@ def oo_callback(
         return {"error": 1, "detail": "Invalid callback url scheme"}
 
     target.parent.mkdir(parents=True, exist_ok=True)
-    logger.info(f"[oo-callback] fetching modified file from {url} → {target}")
+    fetch_url = _rewrite_oo_callback_url(url)
+    if fetch_url != url:
+        logger.info(f"[oo-callback] rewrote url {url} → {fetch_url}")
+    logger.info(f"[oo-callback] fetching modified file from {fetch_url} → {target}")
     try:
-        with urllib.request.urlopen(url, timeout=60) as resp:
+        with urllib.request.urlopen(fetch_url, timeout=60) as resp:
             with target.open("wb") as fout:
                 while True:
                     chunk = resp.read(64 * 1024)
