@@ -90,6 +90,7 @@ function EditPageInner() {
           token: body.token,
           width: "100%",
           height: "100%",
+          type: "desktop",
         };
         editorRef.current = new window.DocsAPI.DocEditor("oo-placeholder", cfg);
       } catch (e) {
@@ -107,19 +108,27 @@ function EditPageInner() {
     };
   }, [taskId, filename]);
 
+  // 전체 viewport overlay — root layout의 컨테이너·BottomTabs·globals.css main
+  // padding을 모두 escape. OnlyOffice iframe이 정확한 height/width를 받아야
+  // 짤리지 않음.
   return (
     <main
-      className="min-h-screen flex flex-col"
-      style={{ backgroundColor: "var(--color-bg-base)" }}
+      className="fixed inset-0 flex flex-col z-50"
+      style={{
+        padding: 0,
+        margin: 0,
+        backgroundColor: "var(--color-bg-base)",
+      }}
     >
       <header
-        className="flex items-center justify-between px-4 py-2"
+        className="flex items-center justify-between px-4 py-2 flex-shrink-0"
         style={{
           borderBottom: "1px solid var(--color-border-subtle)",
           backgroundColor: "var(--color-bg-card)",
+          height: "48px",
         }}
       >
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p
             className="text-[13px] font-medium truncate"
             style={{ color: "var(--color-text-primary)" }}
@@ -127,14 +136,17 @@ function EditPageInner() {
             ✏️ {filename ?? "(파일 없음)"}
           </p>
           {status && (
-            <p className="text-[11px]" style={{ color: "var(--color-text-secondary)" }}>
+            <p
+              className="text-[11px] truncate"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
               {status}
             </p>
           )}
         </div>
         <a
           href="/tasks"
-          className="text-[12px] underline-offset-2 hover:underline"
+          className="text-[12px] underline-offset-2 hover:underline flex-shrink-0 ml-3"
           style={{ color: "var(--color-text-secondary)" }}
         >
           ← 작업으로
@@ -142,7 +154,7 @@ function EditPageInner() {
       </header>
       {error && (
         <div
-          className="p-3 text-[12px]"
+          className="p-3 text-[12px] flex-shrink-0"
           style={{ color: "#B00020", backgroundColor: "var(--color-bg-base)" }}
         >
           {error}
@@ -152,7 +164,7 @@ function EditPageInner() {
         ref={placeholderRef}
         id="oo-placeholder"
         className="flex-1"
-        style={{ minHeight: "70vh" }}
+        style={{ minHeight: 0, width: "100%" }}
       />
     </main>
   );
