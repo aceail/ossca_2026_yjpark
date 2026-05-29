@@ -244,50 +244,59 @@ def _apply_time_regex_to_recent_tasks(conn, user_id: str, user_message: str, now
     return n
 
 
-def _build_temporal_hints(user_message: str) -> str:
-    """Sprint 25: 사용자 발화의 상대 시간 표현 → 절대 날짜 강제 매핑.
+def _build_temporal_hints(user_message: str, conn=None, user_id: str = "") -> str:
+    """Sprint 25 + 40: 현재 시각 + open task 마감 hint. LLM의 시간 환각 방지.
 
-    qwen3 같은 모델은 시스템 prompt의 '오늘 날짜' 줄을 무시하고 cutoff
-    기준으로 '오늘'을 해석하는 경향이 있다. 사용자 메시지에 상대 단어가
-    있으면 그것만 명시 매핑해 다시 박는다.
+    Includes:
+    - 현재 시각 (KST)
+    - Open task 마감 시간 (최대 3건)
+    - 강력한 지시: 절대 직접 계산하지 말고 위 값만 verbatim 사용
     """
-    if not user_message:
-        return ""
-    from datetime import date as _date, timedelta
-    today_kst = (datetime.now(timezone.utc) + timedelta(hours=9)).date()
+    from datetime import timedelta as _timedelta
+    _KST = timezone(_timedelta(hours=9))
+    now_utc = datetime.now(timezone.utc)
+    now_kst = now_utc.astimezone(_KST)
 
-    def _line(label: str, d: _date) -> str:
-        return f"- {label} = {d.isoformat()} ({_KO_WEEKDAY[d.weekday()]}요일)"
+    parts = [
+        "",
+        "[시간 hint — 답변에 시간/남은 시간 언급할 땐 절대 직접 계산하지 말고",
+        " 아래 값만 그대로 복사해서 출력. 환각 금지.]",
+        f"- 현재: {now_kst.strftime('%Y-%m-%d %H:%M')} KST ({_KO_WEEKDAY[now_kst.weekday()]}요일)",
+    ]
 
-    lines: list[str] = []
-    if "오늘" in user_message:
-        lines.append(_line("오늘", today_kst))
-    if "내일" in user_message:
-        lines.append(_line("내일", today_kst + timedelta(days=1)))
-    if "모레" in user_message:
-        lines.append(_line("모레", today_kst + timedelta(days=2)))
-    if "이번주" in user_message:
-        end = today_kst + timedelta(days=(6 - today_kst.weekday()))
-        lines.append(_line("이번주 끝(일)", end))
-    if "다음주" in user_message:
-        next_mon = today_kst + timedelta(days=(7 - today_kst.weekday()))
-        next_sun = next_mon + timedelta(days=6)
-        lines.append(_line("다음주 시작(월)", next_mon))
-        lines.append(_line("다음주 끝(일)", next_sun))
-    for i, kw in enumerate(_KO_WEEKDAY):
-        if f"{kw}요일" in user_message:
-            days_ahead = (i - today_kst.weekday()) % 7
-            if days_ahead == 0:
-                days_ahead = 7
-            lines.append(_line(f"다음 {kw}요일", today_kst + timedelta(days=days_ahead)))
-            break
-    if not lines:
-        return ""
-    return (
-        "\n\n[시간 해석 강제 매핑 — 절대 무시 금지]\n"
-        + "\n".join(lines)
-        + "\n위 매핑을 그대로 사용. 학습 데이터의 옛 날짜 절대 사용 금지.\n"
-    )
+    # open task 마감 hint (최대 3건)
+    if conn is not None and user_id:
+        try:
+            rows = conn.execute(
+                "SELECT title, deadline_at FROM Task "
+                "WHERE user_id = ? AND status = 'open' AND deadline_at IS NOT NULL "
+                "ORDER BY deadline_at ASC LIMIT 3",
+                (user_id,),
+            ).fetchall()
+            for r in rows:
+                try:
+                    dl = datetime.fromisoformat(r["deadline_at"])
+                    if dl.tzinfo is None:
+                        dl = dl.replace(tzinfo=timezone.utc)
+                    dl_kst = dl.astimezone(_KST)
+                    delta = dl - now_utc
+                    sec = int(delta.total_seconds())
+                    if sec < 0:
+                        rem = "이미 지남"
+                    else:
+                        hrs = sec // 3600
+                        mins = (sec % 3600) // 60
+                        rem = f"{hrs}h {mins}min 남음"
+                    parts.append(
+                        f"- 마감 \"{r['title']}\": {dl_kst.strftime('%Y-%m-%d %H:%M')} KST ({rem})"
+                    )
+                except (ValueError, TypeError):
+                    continue
+        except Exception:
+            pass
+
+    parts.append("")
+    return "\n".join(parts)
 
 
 def _persona_system_prompt_with_memory(
@@ -710,7 +719,7 @@ def post_user_message(
     system_prompt = _persona_system_prompt_with_memory(
         conn, sess["persona_id"], sess["user_id"],
     )
-    system_prompt = system_prompt + _build_temporal_hints(content)
+    system_prompt = system_prompt + _build_temporal_hints(content, conn=conn, user_id=sess["user_id"])
     # Sprint 30: RAG auto-inject
     try:
         from rag.retriever import recall_semantic, format_for_prompt

@@ -304,6 +304,9 @@ class SessionOrchestrator:
         if ratio_hint:
             system_prompt = f"{system_prompt or ''}\n\n{ratio_hint}"
 
+        # Sprint 40 T4: 시간 정보는 위 컨텍스트의 값만 그대로 복사해서 사용. 직접 계산 금지.
+        system_prompt = f"{system_prompt or ''}\n\n시간 정보(현재/남은 시간/마감 등)는 위 컨텍스트의 값만 그대로 복사해서 사용. 직접 계산 금지. 환각 금지.\n"
+
         # 사용자 메시지 구성
         user_msg = avoidance_input
         if timeline_hint:
