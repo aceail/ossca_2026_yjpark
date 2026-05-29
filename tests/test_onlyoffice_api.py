@@ -132,6 +132,25 @@ class TestEditConfig(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["config"]["documentType"], "slide")
 
+    def test_document_key_is_safe_charset(self):
+        """OnlyOffice key는 [a-zA-Z0-9_-]만 허용 — 한글 파일명이라도."""
+        import re
+        u, h = _create_user()
+        tid = _upload_file(u, h, "발표대본.docx", b"PK\x03\x04fake-docx")
+        r = client.get(
+            "/api/tasks/{}/files/%EB%B0%9C%ED%91%9C%EB%8C%80%EB%B3%B8.docx/edit-config".format(tid),
+            headers=h,
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        key = r.json()["config"]["document"]["key"]
+        self.assertRegex(key, r"^[a-zA-Z0-9_-]{1,128}$")
+        # 동일 파일 두 번째 요청은 같은 key (mtime 같으면) — cache 일관성
+        r2 = client.get(
+            "/api/tasks/{}/files/%EB%B0%9C%ED%91%9C%EB%8C%80%EB%B3%B8.docx/edit-config".format(tid),
+            headers=h,
+        )
+        self.assertEqual(r2.json()["config"]["document"]["key"], key)
+
     def test_unsupported_ext_400(self):
         u, h = _create_user()
         tid = _upload_file(u, h, "blob.bin", b"\x00\x01\x02")

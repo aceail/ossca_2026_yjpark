@@ -15,6 +15,7 @@ OnlyOffice도 JWT_ENABLED=true라 우리가 보내는 config 전체를 같은 se
 
 from __future__ import annotations
 
+import hashlib
 import os
 import sqlite3
 import urllib.request
@@ -137,11 +138,15 @@ def edit_config(
         user_id=token_user_id, task_id=task_id, filename=target.name,
     )
     backend_url = _backend_internal_url()
+    # OnlyOffice document key는 [a-zA-Z0-9_-]{1,128}만 허용. 한글/점/슬래시 등이
+    # 포함되면 sockjs polling URL이 400 Bad Request로 거부됨. filename을 md5로
+    # 해시해서 (task_id, filename, mtime) 조합 unique 유지.
+    name_hash = hashlib.md5(target.name.encode("utf-8")).hexdigest()[:16]
+    doc_key = f"t{task_id}_{name_hash}_{mtime}"
     config = {
         "document": {
             "fileType": ext,
-            # key는 파일 변경마다 달라져야 OnlyOffice가 cache invalidate
-            "key": f"t{task_id}-{target.name}-{mtime}",
+            "key": doc_key,
             "title": target.name,
             "url": f"{backend_url}/api/_oo/doc?t={edit_jwt}",
         },
