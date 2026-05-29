@@ -82,10 +82,9 @@ async def _rag_index_loop(interval_seconds: int) -> None:
     logger = logging.getLogger(__name__)
     while True:
         try:
-            from db.schema import open_db
             from rag.indexer import tick as _rag_tick
             from rag.store import ensure_vec_table
-            conn = open_db()
+            conn = open_db(DB_PATH)
             ensure_vec_table(conn)
             n = _rag_tick(conn)
             conn.close()
