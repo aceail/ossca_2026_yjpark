@@ -103,3 +103,14 @@ python -m eval.cli run-scenarios eval/scenarios/sprint29.json --json-summary
 
 If you change span names or attribute keys here, update the extractor
 (`eval/phoenix_export.py`) and the eval scenarios so the metrics still bind.
+
+## Sprint 30 — RAG Memory
+
+새 `rag/` 모듈은 Phoenix에서 `trace_subsystem("rag")` 네임스페이스로 가시화됨:
+
+- `rag.embedder.embed_text` — Ollama `/api/embeddings` 호출. latency·error_rate가 Phoenix 트레이스에 자동 기록됨.
+- `rag.store.search` — sqlite-vec KNN. 벡터 차원/k 파라미터가 span attribute로 캡처.
+- `rag.indexer.tick` — 60초 주기 backfill loop의 한 tick. `n_indexed`가 카운터로 노출.
+- `rag.retriever.recall_semantic` — chat auto-inject 및 LLM tool 경로 공통 진입점. `query` 길이·`k`·반환 hit 개수가 attribute.
+
+`chat.post_user_message` 트레이스에서 RAG hit이 system_prompt에 prefix되는 순간이 자식 span으로 보임. retriever fail-soft (Ollama 다운 등) 시 빈 list 반환하므로 chat span은 항상 정상 종료됨.

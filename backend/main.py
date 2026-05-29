@@ -76,6 +76,28 @@ async def _reflection_loop(interval_seconds: int) -> None:
             continue
 
 
+async def _rag_index_loop(interval_seconds: int) -> None:
+    """Sprint 30: RAG 주기 backfill. lifespan task로 실행."""
+    import logging
+    logger = logging.getLogger(__name__)
+    while True:
+        try:
+            from db.schema import open_db
+            from rag.indexer import tick as _rag_tick
+            from rag.store import ensure_vec_table
+            conn = open_db()
+            ensure_vec_table(conn)
+            n = _rag_tick(conn)
+            conn.close()
+            if n:
+                logger.info(f"rag indexed {n} docs")
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            logger.exception("rag index loop error")
+        await asyncio.sleep(interval_seconds)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """시작 시 DB migrate + seed_builtin_prompts + folder watch task."""
@@ -101,6 +123,7 @@ async def lifespan(app: FastAPI):
     watch_task = None
     followup_task = None
     reflection_task = None
+    rag_index_task = None
     if os.environ.get("NAEIL_DISABLE_WATCH") != "1":
         interval_min = int(os.environ.get("NAEIL_WATCH_INTERVAL_MIN", "30"))
         watch_task = asyncio.create_task(
@@ -117,11 +140,15 @@ async def lifespan(app: FastAPI):
         reflection_task = asyncio.create_task(
             _reflection_loop(max(ref_hours, 1) * 3600)
         )
+    if os.environ.get("NAEIL_DISABLE_RAG_INDEX") != "1":
+        rag_index_task = asyncio.create_task(
+            _rag_index_loop(int(os.environ.get("NAEIL_RAG_INDEX_INTERVAL_SEC", "60")))
+        )
 
     try:
         yield
     finally:
-        for t in (watch_task, followup_task, reflection_task):
+        for t in (watch_task, followup_task, reflection_task, rag_index_task):
             if t:
                 t.cancel()
                 try:

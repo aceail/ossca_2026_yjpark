@@ -583,6 +583,16 @@ def post_user_message(
         conn, sess["persona_id"], sess["user_id"],
     )
     system_prompt = system_prompt + _build_temporal_hints(content)
+    # Sprint 30: RAG auto-inject
+    try:
+        from rag.retriever import recall_semantic, format_for_prompt
+        rag_hits = recall_semantic(
+            conn, user_id=sess["user_id"], query=content,
+            kinds=("chat", "memory"), k=3,
+        )
+        system_prompt = system_prompt + format_for_prompt(rag_hits)
+    except Exception:
+        pass  # fail-soft: RAG 실패해도 chat은 진행
     history = _load_history(conn, session_id)
 
     # Sprint 25 보강: 마지막 user 메시지에 현재 시각을 직접 prefix. system prompt를
