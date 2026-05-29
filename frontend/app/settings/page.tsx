@@ -410,8 +410,14 @@ export default function SettingsPage() {
 
   const isSelfBlameRising = detectSelfBlameRising(safetyTrend);
 
-  const maxSelfBlame = Math.max(...safetyTrend.map((w) => w.self_blame_word_count), 1);
-  const maxIdentityFail = Math.max(...safetyTrend.map((w) => w.identity_failure_count), 1);
+  const maxSelfBlame = Math.max(
+    ...safetyTrend.map((w) => Number(w.self_blame_word_count) || 0),
+    1,
+  );
+  const maxIdentityFail = Math.max(
+    ...safetyTrend.map((w) => Number(w.identity_failure_count) || 0),
+    1,
+  );
 
   if (userLoading) {
     return (
@@ -763,9 +769,15 @@ export default function SettingsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {safetyTrend.map((week, idx) => (
+                  {safetyTrend.map((week, idx) => {
+                    const selfBlame = Number(week.self_blame_word_count) || 0;
+                    const idFail = Number(week.identity_failure_count) || 0;
+                    const failRatio = Number(week.failure_imagery_ratio) || 0;
+                    const tension = Number(week.pre_card_tension) || 0;
+                    const dateLabel = (week.week_start ?? "").slice(5, 10).replace("-", "/");
+                    return (
                     <tr
-                      key={week.week_start}
+                      key={week.week_start ?? idx}
                       style={{
                         backgroundColor:
                           idx % 2 === 0 ? "var(--color-bg-base)" : "var(--color-bg-card)",
@@ -775,38 +787,38 @@ export default function SettingsPage() {
                         className="px-3 py-2"
                         style={{ color: "var(--color-text-secondary)" }}
                       >
-                        {week.week_start.slice(5, 10).replace("-", "/")}
+                        {dateLabel}
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-2">
                           <span style={{ color: "var(--color-text-primary)" }}>
-                            {week.self_blame_word_count}
+                            {selfBlame}
                           </span>
-                          <MiniBar value={week.self_blame_word_count} max={maxSelfBlame} />
+                          <MiniBar value={selfBlame} max={maxSelfBlame} />
                         </div>
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-2">
                           <span style={{ color: "var(--color-text-primary)" }}>
-                            {week.identity_failure_count}
+                            {idFail}
                           </span>
-                          <MiniBar value={week.identity_failure_count} max={maxIdentityFail} />
+                          <MiniBar value={idFail} max={maxIdentityFail} />
                         </div>
                       </td>
                       <td
                         className="px-3 py-2"
                         style={{ color: "var(--color-text-primary)" }}
                       >
-                        {(week.failure_imagery_ratio * 100).toFixed(0)}%
+                        {(failRatio * 100).toFixed(0)}%
                       </td>
                       <td
                         className="px-3 py-2"
                         style={{ color: "var(--color-text-primary)" }}
                       >
-                        {week.pre_card_tension.toFixed(1)}
+                        {tension.toFixed(1)}
                       </td>
                     </tr>
-                  ))}
+                  );})}
                 </tbody>
               </table>
             </div>
