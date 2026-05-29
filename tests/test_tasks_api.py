@@ -233,5 +233,95 @@ class TestTasksUpload(unittest.TestCase):
         self.assertEqual(r.status_code, 404)
 
 
+class TestTaskFiles(unittest.TestCase):
+    def _create_task_with_files(self, filenames):
+        u, h = _create_user()
+        tid = client.post(
+            "/api/tasks", headers=h, json={"user_id": u, "title": "F"}
+        ).json()["id"]
+        files = [
+            ("files", (name, content, "text/plain"))
+            for name, content in filenames
+        ]
+        r = client.post(f"/api/tasks/{tid}/upload", headers=h, files=files)
+        self.assertEqual(r.status_code, 200)
+        return u, h, tid
+
+    def test_list_files_empty_when_no_uploads(self):
+        u, h = _create_user()
+        tid = client.post(
+            "/api/tasks", headers=h, json={"user_id": u, "title": "X"}
+        ).json()["id"]
+        r = client.get(f"/api/tasks/{tid}/files", headers=h)
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["files"], [])
+        self.assertEqual(body["task_id"], tid)
+
+    def test_list_files_after_upload(self):
+        u, h, tid = self._create_task_with_files([
+            ("a.txt", b"AAA"), ("b.md", b"BBBB"),
+        ])
+        r = client.get(f"/api/tasks/{tid}/files", headers=h)
+        body = r.json()
+        names = sorted(f["name"] for f in body["files"])
+        sizes = {f["name"]: f["size"] for f in body["files"]}
+        self.assertEqual(names, ["a.txt", "b.md"])
+        self.assertEqual(sizes["a.txt"], 3)
+        self.assertEqual(sizes["b.md"], 4)
+
+    def test_delete_removes_single_file(self):
+        u, h, tid = self._create_task_with_files([
+            ("keep.txt", b"K"), ("gone.txt", b"G"),
+        ])
+        r = client.delete(f"/api/tasks/{tid}/files/gone.txt", headers=h)
+        self.assertEqual(r.status_code, 204)
+        names = sorted(
+            f["name"] for f in client.get(
+                f"/api/tasks/{tid}/files", headers=h,
+            ).json()["files"]
+        )
+        self.assertEqual(names, ["keep.txt"])
+
+    def test_delete_missing_file_is_idempotent(self):
+        u, h, tid = self._create_task_with_files([("x.txt", b"X")])
+        # 두 번 호출해도 둘 다 204
+        r1 = client.delete(f"/api/tasks/{tid}/files/x.txt", headers=h)
+        r2 = client.delete(f"/api/tasks/{tid}/files/x.txt", headers=h)
+        self.assertEqual(r1.status_code, 204)
+        self.assertEqual(r2.status_code, 204)
+
+    def test_delete_path_traversal_rejected(self):
+        u, h, tid = self._create_task_with_files([("ok.txt", b"O")])
+        # path component를 포함해도 sanitize 후 base 안만 접근
+        r = client.delete(
+            f"/api/tasks/{tid}/files/..%2F..%2Fetc%2Fpasswd", headers=h,
+        )
+        # FastAPI가 raw 디코딩하므로 sanitize가 _ 로 바꿈 → 존재하지 않는 파일 → 204
+        self.assertIn(r.status_code, (204, 400, 404))
+        # ok.txt는 그대로 남아있음
+        self.assertEqual(
+            len(client.get(f"/api/tasks/{tid}/files", headers=h).json()["files"]),
+            1,
+        )
+
+    def test_download_returns_content(self):
+        u, h, tid = self._create_task_with_files([("d.txt", b"download me")])
+        r = client.get(f"/api/tasks/{tid}/files/d.txt/download", headers=h)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.content, b"download me")
+
+    def test_download_404_missing(self):
+        u, h, tid = self._create_task_with_files([("a.txt", b"A")])
+        r = client.get(f"/api/tasks/{tid}/files/nope.txt/download", headers=h)
+        self.assertEqual(r.status_code, 404)
+
+    def test_files_requires_owner(self):
+        u1, h1, tid = self._create_task_with_files([("p.txt", b"P")])
+        _, h2 = _create_user()
+        r = client.get(f"/api/tasks/{tid}/files", headers=h2)
+        self.assertEqual(r.status_code, 403)
+
+
 if __name__ == "__main__":
     unittest.main()

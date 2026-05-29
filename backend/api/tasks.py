@@ -25,10 +25,13 @@ from backend.schemas import (
     FolderSnapshotItem,
     FolderSnapshotListResponse,
     TaskCreateRequest,
+    TaskFileItem,
+    TaskFileListResponse,
     TaskListResponse,
     TaskResponse,
     TaskUpdateRequest,
 )
+from fastapi.responses import FileResponse
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
@@ -260,6 +263,94 @@ async def upload_files(
     conn.commit()
     row = conn.execute("SELECT * FROM Task WHERE id = ?", (task_id,)).fetchone()
     return _row_to_task(row)
+
+
+def _resolve_task_file(existing: dict, filename: str) -> Path:
+    """Resolve a per-task upload file. Validates that path stays inside the
+    user/task upload directory (path traversal defense)."""
+    name = _safe_filename(filename or "")
+    base = (_upload_root() / existing["user_id"] / str(existing["id"])).resolve()
+    target = (base / name).resolve()
+    # 반드시 base 안에 있어야 함
+    if not str(target).startswith(str(base) + os.sep) and target != base:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    return target
+
+
+@router.get("/{task_id}/files", response_model=TaskFileListResponse)
+def list_task_files(
+    task_id: int,
+    conn: sqlite3.Connection = Depends(get_db),
+    token_user_id: str = Depends(resolve_user_from_token),
+) -> TaskFileListResponse:
+    """task의 업로드 디렉터리 내 파일 목록. 디렉터리 없으면 빈 list."""
+    existing = _load_task(conn, task_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Task not found")
+    assert_user_matches(token_user_id, existing["user_id"])
+
+    base = _upload_root() / existing["user_id"] / str(task_id)
+    files: list[TaskFileItem] = []
+    if base.exists() and base.is_dir():
+        for p in sorted(base.iterdir()):
+            if not p.is_file():
+                continue
+            st = p.stat()
+            files.append(
+                TaskFileItem(
+                    name=p.name,
+                    size=st.st_size,
+                    mtime=datetime.fromtimestamp(st.st_mtime, timezone.utc).isoformat(),
+                )
+            )
+    return TaskFileListResponse(
+        task_id=task_id, folder_path=existing.get("folder_path"), files=files,
+    )
+
+
+@router.delete("/{task_id}/files/{filename}", status_code=204)
+def delete_task_file(
+    task_id: int,
+    filename: str,
+    conn: sqlite3.Connection = Depends(get_db),
+    token_user_id: str = Depends(resolve_user_from_token),
+) -> None:
+    """업로드된 단일 파일 삭제. 없는 파일도 204로 처리 (idempotent)."""
+    existing = _load_task(conn, task_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Task not found")
+    assert_user_matches(token_user_id, existing["user_id"])
+
+    target = _resolve_task_file(existing, filename)
+    if target.exists() and target.is_file():
+        target.unlink()
+        conn.execute(
+            "UPDATE Task SET updated_at = ? WHERE id = ?", (_now_iso(), task_id),
+        )
+        conn.commit()
+
+
+@router.get("/{task_id}/files/{filename}/download")
+def download_task_file(
+    task_id: int,
+    filename: str,
+    conn: sqlite3.Connection = Depends(get_db),
+    token_user_id: str = Depends(resolve_user_from_token),
+):
+    """업로드된 파일 다운로드. attachment Content-Disposition."""
+    existing = _load_task(conn, task_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Task not found")
+    assert_user_matches(token_user_id, existing["user_id"])
+
+    target = _resolve_task_file(existing, filename)
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(
+        path=str(target),
+        filename=target.name,
+        media_type="application/octet-stream",
+    )
 
 
 @router.get("/{task_id}/snapshots", response_model=FolderSnapshotListResponse)

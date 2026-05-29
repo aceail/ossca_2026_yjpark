@@ -20,7 +20,19 @@ interface Task {
   updated_at: string;
 }
 
+interface TaskFile {
+  name: string;
+  size: number;
+  mtime: string;
+}
+
 type EditField = "title" | "deadline" | "folder";
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 function daysUntil(deadlineIso: string | null | undefined): string {
   if (!deadlineIso) return "마감 없음";
@@ -80,6 +92,75 @@ export default function TasksPage() {
   const [uploadingId, setUploadingId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [pendingUploadFor, setPendingUploadFor] = useState<number | null>(null);
+
+  // 업로드된 파일 목록 (task id → files)
+  const [filesByTask, setFilesByTask] = useState<Record<number, TaskFile[]>>({});
+  const [expandedTask, setExpandedTask] = useState<Record<number, boolean>>({});
+  const [filesLoadingId, setFilesLoadingId] = useState<number | null>(null);
+
+  const refreshFiles = useCallback(
+    async (id: number) => {
+      setFilesLoadingId(id);
+      try {
+        const res = await fetch(`${API_BASE}/api/tasks/${id}/files`, {
+          headers: { ...authHeaders() },
+        });
+        if (!res.ok) throw new Error(`파일 목록 로드 실패 (${res.status})`);
+        const data = await res.json();
+        setFilesByTask((prev) => ({ ...prev, [id]: data.files ?? [] }));
+      } catch (e) {
+        setError((e as Error).message);
+      } finally {
+        setFilesLoadingId(null);
+      }
+    },
+    [],
+  );
+
+  const toggleFilesPanel = async (id: number) => {
+    const willOpen = !expandedTask[id];
+    setExpandedTask((prev) => ({ ...prev, [id]: willOpen }));
+    if (willOpen && filesByTask[id] === undefined) {
+      await refreshFiles(id);
+    }
+  };
+
+  const deleteUploadedFile = async (id: number, name: string) => {
+    if (!confirm(`"${name}" 파일을 삭제할까요?`)) return;
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/tasks/${id}/files/${encodeURIComponent(name)}`,
+        { method: "DELETE", headers: { ...authHeaders() } },
+      );
+      if (!res.ok && res.status !== 204) {
+        throw new Error(`삭제 실패 (${res.status})`);
+      }
+      await refreshFiles(id);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const downloadUploadedFile = async (id: number, name: string) => {
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/tasks/${id}/files/${encodeURIComponent(name)}/download`,
+        { headers: { ...authHeaders() } },
+      );
+      if (!res.ok) throw new Error(`다운로드 실패 (${res.status})`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
 
   const fetchTasks = useCallback(async (uid: string) => {
     setLoading(true);
@@ -219,6 +300,9 @@ export default function TasksPage() {
         throw new Error(`업로드 실패 (${res.status})${msg ? `: ${msg.slice(0, 80)}` : ""}`);
       }
       await fetchTasks(userId);
+      // 업로드 후 자동으로 파일 목록 갱신 + 패널 열기
+      setExpandedTask((prev) => ({ ...prev, [id]: true }));
+      await refreshFiles(id);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -590,6 +674,77 @@ export default function TasksPage() {
                       ⊗
                     </Button>
                   </div>
+                </div>
+
+                {/* 업로드된 파일 패널 */}
+                <div className="mt-2 pt-2" style={{ borderTop: "1px dashed var(--color-border-subtle)" }}>
+                  <button
+                    type="button"
+                    onClick={() => toggleFilesPanel(t.id)}
+                    className="text-[11px] hover:underline underline-offset-2"
+                    style={{ color: "var(--color-text-secondary)" }}
+                  >
+                    📂 업로드 파일{" "}
+                    {filesByTask[t.id]
+                      ? `${filesByTask[t.id].length}개`
+                      : "(확인하기)"}
+                    <span className="ml-1">{expandedTask[t.id] ? "▾" : "▸"}</span>
+                  </button>
+                  {expandedTask[t.id] && (
+                    <div className="mt-1.5">
+                      {filesLoadingId === t.id && filesByTask[t.id] === undefined ? (
+                        <p className="text-[11px]" style={{ color: "var(--color-text-secondary)" }}>
+                          불러오는 중...
+                        </p>
+                      ) : (filesByTask[t.id]?.length ?? 0) === 0 ? (
+                        <p className="text-[11px]" style={{ color: "var(--color-text-secondary)" }}>
+                          업로드된 파일이 없어요. 「📎 업로드」를 눌러 추가하세요.
+                        </p>
+                      ) : (
+                        <ul className="flex flex-col gap-1">
+                          {filesByTask[t.id]!.map((f) => (
+                            <li
+                              key={f.name}
+                              className="flex items-center justify-between gap-2 text-[11px] px-2 py-1 rounded"
+                              style={{
+                                backgroundColor: "var(--color-bg-base)",
+                                border: "1px solid var(--color-border-subtle)",
+                              }}
+                            >
+                              <span className="font-mono truncate flex-1">{f.name}</span>
+                              <span
+                                className="flex-shrink-0"
+                                style={{ color: "var(--color-text-secondary)" }}
+                              >
+                                {formatSize(f.size)}
+                              </span>
+                              <div className="flex gap-1 flex-shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => downloadUploadedFile(t.id, f.name)}
+                                  className="px-1.5 underline-offset-2 hover:underline"
+                                  aria-label={`${f.name} 다운로드`}
+                                  title="다운로드"
+                                >
+                                  📥
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => deleteUploadedFile(t.id, f.name)}
+                                  className="px-1.5 underline-offset-2 hover:underline"
+                                  aria-label={`${f.name} 삭제`}
+                                  title="삭제"
+                                  style={{ color: "#B00020" }}
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
                 </div>
               </li>
             );
