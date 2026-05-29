@@ -44,6 +44,25 @@ services:
     environment:
       PHOENIX_WORKING_DIR: /data
 
+  onlyoffice:
+    # Sprint 34: in-browser docx/pptx editing. Self-hosted OnlyOffice DocServer CE.
+    image: onlyoffice/documentserver:latest
+    container_name: naeil-onlyoffice
+    restart: unless-stopped
+    ports:
+      # Loopback only — single-tenant. Override via TOMORROW_YOU_OO_PORT.
+      - "127.0.0.1:${TOMORROW_YOU_OO_PORT:-8090}:80"
+    environment:
+      # JWT 보호 활성화 — backend가 같은 secret으로 서명/검증.
+      JWT_ENABLED: "true"
+      JWT_SECRET: ${TOMORROW_YOU_OO_JWT_SECRET:-change-me-in-prod-32bytes-please}
+      JWT_HEADER: Authorization
+      JWT_IN_BODY: "true"
+    volumes:
+      - onlyoffice_data:/var/www/onlyoffice/Data
+      - onlyoffice_log:/var/log/onlyoffice
+      - onlyoffice_cache:/var/lib/onlyoffice/documentserver/App_Data/cache/files
+
   backend:
     build:
       context: ..
@@ -55,8 +74,16 @@ services:
         condition: service_healthy
       phoenix:
         condition: service_started
+      onlyoffice:
+        condition: service_started
     environment:
       TOMORROW_YOU_DB: /data/tomorrow_you.db
+      # Sprint 34: OnlyOffice WOPI integration
+      TOMORROW_YOU_OO_JWT_SECRET: ${TOMORROW_YOU_OO_JWT_SECRET:-change-me-in-prod-32bytes-please}
+      # 브라우저가 OnlyOffice api.js를 받을 외부 URL (사용자가 보는 origin)
+      TOMORROW_YOU_OO_PUBLIC_URL: ${TOMORROW_YOU_OO_PUBLIC_URL:-http://localhost:${TOMORROW_YOU_OO_PORT:-8090}}
+      # OnlyOffice가 backend에 접근할 내부 docker network URL
+      TOMORROW_YOU_BACKEND_INTERNAL_URL: http://backend:8001
       NAEIL_AGENT_MODEL: ${NAEIL_AGENT_MODEL:-qwen3:8b}
       NAEIL_AGENT_TOOLS: "1"
       NAEIL_WATCH_INTERVAL_MIN: ${NAEIL_WATCH_INTERVAL_MIN:-30}
@@ -101,3 +128,6 @@ volumes:
   ollama_data:
   naeil_data:
   phoenix_data:
+  onlyoffice_data:
+  onlyoffice_log:
+  onlyoffice_cache:

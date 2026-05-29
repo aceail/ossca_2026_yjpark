@@ -34,6 +34,17 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+const EDITABLE_EXTS = new Set([
+  "docx", "doc", "odt", "txt", "rtf", "md",
+  "xlsx", "xls", "ods", "csv",
+  "pptx", "ppt", "odp",
+]);
+
+function isEditable(name: string): boolean {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  return EDITABLE_EXTS.has(ext);
+}
+
 function daysUntil(deadlineIso: string | null | undefined): string {
   if (!deadlineIso) return "마감 없음";
   const d = new Date(deadlineIso).getTime();
@@ -719,6 +730,18 @@ export default function TasksPage() {
                                 {formatSize(f.size)}
                               </span>
                               <div className="flex gap-1 flex-shrink-0">
+                                {isEditable(f.name) && (
+                                  <a
+                                    href={`/tasks/edit?taskId=${t.id}&name=${encodeURIComponent(f.name)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-1.5 underline-offset-2 hover:underline"
+                                    aria-label={`${f.name} 편집`}
+                                    title="브라우저에서 편집 (OnlyOffice)"
+                                  >
+                                    ✏️
+                                  </a>
+                                )}
                                 <button
                                   type="button"
                                   onClick={() => downloadUploadedFile(t.id, f.name)}
