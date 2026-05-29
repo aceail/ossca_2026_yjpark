@@ -85,6 +85,9 @@ services:
       TOMORROW_YOU_OO_PUBLIC_URL: ${TOMORROW_YOU_OO_PUBLIC_URL:-http://localhost:${TOMORROW_YOU_OO_PORT:-8090}}
       # OnlyOffice가 backend에 접근할 내부 docker network URL
       TOMORROW_YOU_BACKEND_INTERNAL_URL: http://backend:8001
+      # backend가 OnlyOffice cache에 접근할 내부 docker URL — callback의
+      # localhost:8090을 이걸로 치환해서 fetch.
+      TOMORROW_YOU_OO_INTERNAL_URL: http://onlyoffice
       NAEIL_AGENT_MODEL: ${NAEIL_AGENT_MODEL:-qwen3:8b}
       NAEIL_AGENT_TOOLS: "1"
       NAEIL_WATCH_INTERVAL_MIN: ${NAEIL_WATCH_INTERVAL_MIN:-30}
