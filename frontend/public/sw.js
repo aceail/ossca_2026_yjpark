@@ -1,7 +1,7 @@
 // Wave 5: 서비스 워커 — offline 캐시 (stale-while-revalidate) + Wave 6 push handler stub.
 // 외부 라이브러리 없이 stdlib만 (OSS 정렬).
 
-const CACHE_NAME = "naeil-v10";  // Sprint 32-34 — task upload/edit, mobile chat drawer, OnlyOffice editing
+const CACHE_NAME = "naeil-v11";  // Sprint 34 — edit page full-viewport overlay fix
 const APP_SHELL = ["/", "/chat", "/tasks", "/calendar", "/settings", "/personas", "/icon.svg"];
 
 self.addEventListener("install", (event) => {
