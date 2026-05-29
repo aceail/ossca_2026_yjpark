@@ -100,6 +100,7 @@ export default function ChatPage() {
 
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [sessions, setSessions] = useState<ChatSessionListItem[]>([]);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // 모바일 기록 드로워
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -317,6 +318,7 @@ export default function ChatPage() {
 
   const switchSession = async (sid: number) => {
     setSessionId(sid);
+    setSidebarOpen(false); // 모바일에서 선택하면 드로워 닫기
     setMessages(await fetchMessages(sid));
   };
 
@@ -390,17 +392,65 @@ export default function ChatPage() {
             );
           })()}
         </div>
-        <Button variant="ghost" size="sm" onClick={handleNewSession} disabled={sending}>
-          + 새 대화
-        </Button>
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="대화 기록 열기"
+            className="md:hidden"
+          >
+            📚 기록
+          </Button>
+          <Button variant="ghost" size="sm" onClick={handleNewSession} disabled={sending}>
+            + 새 대화
+          </Button>
+        </div>
       </header>
 
-      <div className="flex-1 flex">
-        {/* 사이드: 세션 목록 */}
+      <div className="flex-1 flex relative">
+        {/* 모바일 백드롭 — 드로워 열렸을 때 탭하면 닫힘 */}
+        {sidebarOpen && (
+          <button
+            type="button"
+            aria-label="대화 기록 닫기"
+            onClick={() => setSidebarOpen(false)}
+            className="fixed inset-0 z-20 md:hidden"
+            style={{ backgroundColor: "rgba(0,0,0,0.35)" }}
+          />
+        )}
+        {/* 사이드: 세션 목록 — 데스크탑은 항상, 모바일은 sidebarOpen일 때 드로워 */}
         <aside
-          className="w-[220px] flex-shrink-0 overflow-y-auto py-3 hidden md:block"
-          style={{ borderRight: "1px solid var(--color-border-subtle)" }}
+          className={`w-[260px] sm:w-[280px] flex-shrink-0 overflow-y-auto py-3 ${
+            sidebarOpen
+              ? "fixed inset-y-0 left-0 z-30 shadow-2xl"
+              : "hidden"
+          } md:block md:static md:z-auto md:shadow-none`}
+          style={{
+            borderRight: "1px solid var(--color-border-subtle)",
+            backgroundColor: "var(--color-bg-base)",
+          }}
         >
+          {/* 모바일 닫기 버튼 */}
+          {sidebarOpen && (
+            <div className="flex items-center justify-between px-3 pb-2 md:hidden">
+              <span
+                className="text-[12px] uppercase tracking-widest"
+                style={{ color: "var(--color-text-secondary)" }}
+              >
+                대화 기록
+              </span>
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(false)}
+                aria-label="닫기"
+                className="text-[14px] px-2"
+                style={{ color: "var(--color-text-secondary)" }}
+              >
+                ✕
+              </button>
+            </div>
+          )}
           {sessions.length === 0 ? (
             <p className="px-4 text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
               아직 대화가 없어요

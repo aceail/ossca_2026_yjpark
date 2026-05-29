@@ -19,6 +19,9 @@ _TMP_DB_PATH = _tmp_db.name
 _tmp_db.close()
 os.environ["TOMORROW_YOU_DB"] = _TMP_DB_PATH
 
+_TMP_UPLOAD_ROOT = tempfile.mkdtemp(prefix="tomorrow_you_upload_test_")
+os.environ["TOMORROW_YOU_UPLOAD_ROOT"] = _TMP_UPLOAD_ROOT
+
 from backend.main import app
 from backend.deps import get_db
 from db import open_db, migrate
@@ -165,6 +168,68 @@ class TestTasksCRUD(unittest.TestCase):
     def test_update_not_found(self):
         u, h = _create_user()
         r = client.patch("/api/tasks/99999", headers=h, json={"title": "x"})
+        self.assertEqual(r.status_code, 404)
+
+
+class TestTasksUpload(unittest.TestCase):
+    def _create_open_task(self):
+        u, h = _create_user()
+        r = client.post(
+            "/api/tasks", headers=h,
+            json={"user_id": u, "title": "업로드 대상"},
+        )
+        return u, h, r.json()["id"]
+
+    def test_upload_saves_files_and_sets_folder_path(self):
+        u, h, tid = self._create_open_task()
+        files = [
+            ("files", ("note.txt", b"hello world", "text/plain")),
+            ("files", ("draft.md", b"# title\n", "text/markdown")),
+        ]
+        r = client.post(f"/api/tasks/{tid}/upload", headers=h, files=files)
+        self.assertEqual(r.status_code, 200, r.text)
+        data = r.json()
+        # 자동으로 folder_path가 세팅돼야 함
+        self.assertTrue(data["folder_path"])
+        self.assertTrue(data["folder_path"].endswith(f"/{u}/{tid}"))
+        # 파일들이 디스크에 저장됨
+        saved = sorted(os.listdir(data["folder_path"]))
+        self.assertEqual(saved, ["draft.md", "note.txt"])
+
+    def test_upload_preserves_existing_folder_path(self):
+        u, h, tid = self._create_open_task()
+        client.patch(
+            f"/api/tasks/{tid}", headers=h,
+            json={"folder_path": "/custom/path"},
+        )
+        files = [("files", ("x.txt", b"abc", "text/plain"))]
+        r = client.post(f"/api/tasks/{tid}/upload", headers=h, files=files)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["folder_path"], "/custom/path")
+
+    def test_upload_path_traversal_sanitized(self):
+        u, h, tid = self._create_open_task()
+        files = [("files", ("../../../etc/passwd", b"oops", "text/plain"))]
+        r = client.post(f"/api/tasks/{tid}/upload", headers=h, files=files)
+        self.assertEqual(r.status_code, 200)
+        folder = r.json()["folder_path"]
+        saved = os.listdir(folder)
+        # path components 모두 제거 → basename만 + sanitize
+        self.assertEqual(len(saved), 1)
+        self.assertNotIn("..", saved[0])
+        self.assertNotIn("/", saved[0])
+
+    def test_upload_requires_owner(self):
+        u1, h1, tid = self._create_open_task()
+        u2, h2 = _create_user()
+        files = [("files", ("y.txt", b"d", "text/plain"))]
+        r = client.post(f"/api/tasks/{tid}/upload", headers=h2, files=files)
+        self.assertEqual(r.status_code, 403)
+
+    def test_upload_404_when_task_missing(self):
+        u, h = _create_user()
+        files = [("files", ("y.txt", b"d", "text/plain"))]
+        r = client.post("/api/tasks/99999/upload", headers=h, files=files)
         self.assertEqual(r.status_code, 404)
 
 

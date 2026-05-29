@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useUser } from "../../lib/hooks/useUser";
 import { Button } from "../../components/Button";
 import { authHeaders } from "../../lib/auth";
@@ -19,6 +19,8 @@ interface Task {
   created_at: string;
   updated_at: string;
 }
+
+type EditField = "title" | "deadline" | "folder";
 
 function daysUntil(deadlineIso: string | null | undefined): string {
   if (!deadlineIso) return "마감 없음";
@@ -44,11 +46,40 @@ function urgencyColor(deadlineIso: string | null | undefined, status: string): s
   return "var(--color-text-secondary)";
 }
 
+function toDeadlineInputValue(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function fromDeadlineInputValue(s: string): string | null {
+  if (!s) return null;
+  return new Date(`${s}T00:00:00+09:00`).toISOString();
+}
+
 export default function TasksPage() {
   const { userId, loading: userLoading } = useUser();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 신규 task 생성 폼
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newDeadline, setNewDeadline] = useState(""); // YYYY-MM-DD
+  const [creating, setCreating] = useState(false);
+
+  // 인라인 edit
+  const [editing, setEditing] = useState<{ id: number; field: EditField; draft: string } | null>(
+    null,
+  );
+
+  // 파일 업로드
+  const [uploadingId, setUploadingId] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [pendingUploadFor, setPendingUploadFor] = useState<number | null>(null);
 
   const fetchTasks = useCallback(async (uid: string) => {
     setLoading(true);
@@ -71,14 +102,54 @@ export default function TasksPage() {
     if (userId) fetchTasks(userId);
   }, [userId, fetchTasks]);
 
-  const updateStatus = async (id: number, status: Task["status"]) => {
+  const createTask = async () => {
     if (!userId) return;
-    await fetch(`${API_BASE}/api/tasks/${id}`, {
+    const title = newTitle.trim();
+    if (!title) {
+      setError("제목을 입력해주세요");
+      return;
+    }
+    setCreating(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/tasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({
+          user_id: userId,
+          title,
+          deadline_at: fromDeadlineInputValue(newDeadline),
+        }),
+      });
+      if (!res.ok) throw new Error(`생성 실패 (${res.status})`);
+      setNewTitle("");
+      setNewDeadline("");
+      setShowNewForm(false);
+      await fetchTasks(userId);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const patchTask = async (id: number, patch: Record<string, unknown>) => {
+    if (!userId) return;
+    const res = await fetch(`${API_BASE}/api/tasks/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", ...authHeaders() },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(patch),
     });
+    if (!res.ok) throw new Error(`수정 실패 (${res.status})`);
     await fetchTasks(userId);
+  };
+
+  const updateStatus = async (id: number, status: Task["status"]) => {
+    try {
+      await patchTask(id, { status });
+    } catch (e) {
+      setError((e as Error).message);
+    }
   };
 
   const remove = async (id: number) => {
@@ -91,28 +162,69 @@ export default function TasksPage() {
     await fetchTasks(userId);
   };
 
-  const [folderEditId, setFolderEditId] = useState<number | null>(null);
-  const [folderDraft, setFolderDraft] = useState<string>("");
-
-  const beginEditFolder = (id: number, current: string | null | undefined) => {
-    setFolderEditId(id);
-    setFolderDraft(current ?? "");
+  const beginEdit = (id: number, field: EditField, current: string | null | undefined) => {
+    const draft =
+      field === "deadline" ? toDeadlineInputValue(current) : current ?? "";
+    setEditing({ id, field, draft });
   };
 
-  const cancelEditFolder = () => {
-    setFolderEditId(null);
-    setFolderDraft("");
+  const cancelEdit = () => setEditing(null);
+
+  const submitEdit = async () => {
+    if (!editing) return;
+    try {
+      let patch: Record<string, unknown> = {};
+      if (editing.field === "title") {
+        const v = editing.draft.trim();
+        if (!v) {
+          setError("제목은 비울 수 없어요");
+          return;
+        }
+        patch = { title: v };
+      } else if (editing.field === "deadline") {
+        patch = { deadline_at: fromDeadlineInputValue(editing.draft) };
+      } else if (editing.field === "folder") {
+        patch = { folder_path: editing.draft.trim() || null };
+      }
+      await patchTask(editing.id, patch);
+      setEditing(null);
+    } catch (e) {
+      setError((e as Error).message);
+    }
   };
 
-  const submitFolder = async (id: number) => {
-    if (!userId) return;
-    await fetch(`${API_BASE}/api/tasks/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
-      body: JSON.stringify({ folder_path: folderDraft.trim() || null }),
-    });
-    cancelEditFolder();
-    await fetchTasks(userId);
+  const triggerUpload = (id: number) => {
+    setPendingUploadFor(id);
+    fileInputRef.current?.click();
+  };
+
+  const handleFilesChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const id = pendingUploadFor;
+    setPendingUploadFor(null);
+    if (!id || !userId) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setUploadingId(id);
+    setError(null);
+    try {
+      const form = new FormData();
+      for (const f of Array.from(files)) form.append("files", f);
+      const res = await fetch(`${API_BASE}/api/tasks/${id}/upload`, {
+        method: "POST",
+        headers: { ...authHeaders() }, // do NOT set Content-Type — browser sets boundary
+        body: form,
+      });
+      if (!res.ok) {
+        const msg = await res.text().catch(() => "");
+        throw new Error(`업로드 실패 (${res.status})${msg ? `: ${msg.slice(0, 80)}` : ""}`);
+      }
+      await fetchTasks(userId);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setUploadingId(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   if (userLoading) {
@@ -128,19 +240,100 @@ export default function TasksPage() {
       className="min-h-screen p-6 max-w-2xl mx-auto"
       style={{ backgroundColor: "var(--color-bg-base)", color: "var(--color-text-primary)" }}
     >
-      <header className="flex items-center justify-between mb-6">
+      {/* 숨김 파일 입력 — triggerUpload가 클릭 */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={handleFilesChange}
+      />
+
+      <header className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-[22px] font-semibold" style={{ fontFamily: "var(--font-feeling)" }}>
             작업
           </h1>
           <p className="text-[13px]" style={{ color: "var(--color-text-secondary)" }}>
-            챗에서 마감 있는 작업을 말하면 자동으로 등록돼요
+            새로 만들거나 챗에서 마감을 말하면 자동 등록돼요
           </p>
         </div>
-        <a href="/chat" className="text-[12px] underline-offset-2 hover:underline">
-          채팅으로 →
-        </a>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setShowNewForm((v) => !v);
+              setError(null);
+            }}
+          >
+            {showNewForm ? "✕ 닫기" : "+ 새 작업"}
+          </Button>
+          <a href="/chat" className="text-[12px] underline-offset-2 hover:underline">
+            채팅으로 →
+          </a>
+        </div>
       </header>
+
+      {showNewForm && (
+        <div
+          className="rounded-xl p-4 mb-4 flex flex-col gap-2"
+          style={{
+            backgroundColor: "var(--color-bg-card)",
+            border: "1px solid var(--color-border-subtle)",
+          }}
+        >
+          <input
+            type="text"
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            placeholder="작업 제목 (예: 발표자료 마무리)"
+            autoFocus
+            className="px-2 py-1.5 text-[14px] rounded"
+            style={{
+              backgroundColor: "var(--color-bg-base)",
+              border: "1px solid var(--color-border-subtle)",
+              color: "var(--color-text-primary)",
+            }}
+          />
+          <div className="flex gap-2 items-center">
+            <label
+              className="text-[12px]"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              마감 (선택)
+            </label>
+            <input
+              type="date"
+              value={newDeadline}
+              onChange={(e) => setNewDeadline(e.target.value)}
+              className="px-2 py-1 text-[12px] rounded"
+              style={{
+                backgroundColor: "var(--color-bg-base)",
+                border: "1px solid var(--color-border-subtle)",
+                color: "var(--color-text-primary)",
+              }}
+            />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                setShowNewForm(false);
+                setNewTitle("");
+                setNewDeadline("");
+              }}
+              className="text-[12px] px-2"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              취소
+            </button>
+            <Button size="sm" onClick={createTask} disabled={creating}>
+              {creating ? "등록 중..." : "등록"}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {error && (
         <p className="text-[12px] mb-3" style={{ color: "#B00020" }}>
@@ -154,13 +347,19 @@ export default function TasksPage() {
         </p>
       ) : tasks.length === 0 ? (
         <p className="text-[13px] py-12 text-center" style={{ color: "var(--color-text-secondary)" }}>
-          아직 등록된 작업이 없어요. 채팅에서 마감을 말해보세요.
+          아직 등록된 작업이 없어요. 위 「+ 새 작업」을 누르거나 채팅에서 말해보세요.
         </p>
       ) : (
         <ul className="flex flex-col gap-3">
           {tasks.map((t) => {
             const dlColor = urgencyColor(t.deadline_at, t.status);
             const isDone = t.status === "done";
+            const isEditingTitle =
+              editing?.id === t.id && editing.field === "title";
+            const isEditingDeadline =
+              editing?.id === t.id && editing.field === "deadline";
+            const isEditingFolder =
+              editing?.id === t.id && editing.field === "folder";
             return (
               <li
                 key={t.id}
@@ -168,42 +367,151 @@ export default function TasksPage() {
                 style={{
                   backgroundColor: "var(--color-bg-card)",
                   border: "1px solid var(--color-border-subtle)",
-                  opacity: isDone ? 0.5 : 1,
+                  opacity: isDone ? 0.55 : 1,
                 }}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <p
-                      className="text-[15px] font-medium"
-                      style={{
-                        textDecoration: isDone ? "line-through" : "none",
-                      }}
-                    >
-                      {t.title}
-                    </p>
-                    <p
-                      className="text-[12px] mt-0.5"
-                      style={{ color: dlColor, fontWeight: 500 }}
-                    >
-                      {daysUntil(t.deadline_at)}
-                      {t.deadline_at && (
-                        <span style={{ color: "var(--color-text-secondary)", fontWeight: 400 }}>
-                          {" · "}
-                          {t.deadline_at.slice(0, 10)}
-                        </span>
-                      )}
-                    </p>
-                    {folderEditId === t.id ? (
+                    {/* 제목 */}
+                    {isEditingTitle ? (
+                      <div className="flex gap-1.5">
+                        <input
+                          type="text"
+                          value={editing.draft}
+                          onChange={(e) =>
+                            setEditing({ ...editing, draft: e.target.value })
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") submitEdit();
+                            if (e.key === "Escape") cancelEdit();
+                          }}
+                          autoFocus
+                          className="flex-1 px-2 py-1 text-[14px] rounded"
+                          style={{
+                            backgroundColor: "var(--color-bg-base)",
+                            border: "1px solid var(--color-border-subtle)",
+                            color: "var(--color-text-primary)",
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={submitEdit}
+                          className="text-[11px] px-2 underline-offset-2 hover:underline"
+                        >
+                          저장
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelEdit}
+                          className="text-[11px] px-1"
+                          style={{ color: "var(--color-text-secondary)" }}
+                        >
+                          취소
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => beginEdit(t.id, "title", t.title)}
+                        className="text-[15px] font-medium text-left hover:underline underline-offset-4"
+                        style={{
+                          textDecoration: isDone ? "line-through" : undefined,
+                        }}
+                      >
+                        {t.title}
+                      </button>
+                    )}
+
+                    {/* 마감 */}
+                    {isEditingDeadline ? (
+                      <div className="flex gap-1.5 mt-1">
+                        <input
+                          type="date"
+                          value={editing.draft}
+                          onChange={(e) =>
+                            setEditing({ ...editing, draft: e.target.value })
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") submitEdit();
+                            if (e.key === "Escape") cancelEdit();
+                          }}
+                          autoFocus
+                          className="px-2 py-1 text-[12px] rounded"
+                          style={{
+                            backgroundColor: "var(--color-bg-base)",
+                            border: "1px solid var(--color-border-subtle)",
+                            color: "var(--color-text-primary)",
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={submitEdit}
+                          className="text-[11px] px-2 underline-offset-2 hover:underline"
+                        >
+                          저장
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelEdit}
+                          className="text-[11px] px-1"
+                          style={{ color: "var(--color-text-secondary)" }}
+                        >
+                          취소
+                        </button>
+                        {t.deadline_at && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditing({ ...editing, draft: "" });
+                              submitEdit();
+                            }}
+                            className="text-[11px] px-1"
+                            style={{ color: "var(--color-text-secondary)" }}
+                          >
+                            지우기
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <p
+                        className="text-[12px] mt-0.5"
+                        style={{ color: dlColor, fontWeight: 500 }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => beginEdit(t.id, "deadline", t.deadline_at)}
+                          className="underline-offset-2 hover:underline"
+                        >
+                          {daysUntil(t.deadline_at)}
+                        </button>
+                        {t.deadline_at && (
+                          <span
+                            style={{
+                              color: "var(--color-text-secondary)",
+                              fontWeight: 400,
+                            }}
+                          >
+                            {" · "}
+                            {t.deadline_at.slice(0, 10)}
+                          </span>
+                        )}
+                      </p>
+                    )}
+
+                    {/* 폴더 */}
+                    {isEditingFolder ? (
                       <div className="flex gap-1.5 mt-1.5">
                         <input
                           type="text"
-                          value={folderDraft}
-                          onChange={(e) => setFolderDraft(e.target.value)}
+                          value={editing.draft}
+                          onChange={(e) =>
+                            setEditing({ ...editing, draft: e.target.value })
+                          }
                           onKeyDown={(e) => {
-                            if (e.key === "Enter") submitFolder(t.id);
-                            if (e.key === "Escape") cancelEditFolder();
+                            if (e.key === "Enter") submitEdit();
+                            if (e.key === "Escape") cancelEdit();
                           }}
-                          placeholder="/Users/yj/Desktop/work"
+                          placeholder="/Users/yj/Desktop/work 또는 비우기"
                           autoFocus
                           className="flex-1 px-2 py-1 text-[11px] rounded font-mono"
                           style={{
@@ -214,14 +522,14 @@ export default function TasksPage() {
                         />
                         <button
                           type="button"
-                          onClick={() => submitFolder(t.id)}
+                          onClick={submitEdit}
                           className="text-[11px] px-2 underline-offset-2 hover:underline"
                         >
                           저장
                         </button>
                         <button
                           type="button"
-                          onClick={cancelEditFolder}
+                          onClick={cancelEdit}
                           className="text-[11px] px-1"
                           style={{ color: "var(--color-text-secondary)" }}
                         >
@@ -229,19 +537,32 @@ export default function TasksPage() {
                         </button>
                       </div>
                     ) : (
-                      <p className="text-[11px] mt-1.5" style={{ color: "var(--color-text-secondary)" }}>
+                      <p
+                        className="text-[11px] mt-1.5"
+                        style={{ color: "var(--color-text-secondary)" }}
+                      >
                         폴더:{" "}
                         <button
                           type="button"
-                          onClick={() => beginEditFolder(t.id, t.folder_path)}
-                          className="underline-offset-2 hover:underline"
+                          onClick={() => beginEdit(t.id, "folder", t.folder_path)}
+                          className="underline-offset-2 hover:underline font-mono"
                         >
                           {t.folder_path ?? "등록하기"}
                         </button>
                       </p>
                     )}
                   </div>
+
                   <div className="flex flex-col gap-1.5 flex-shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => triggerUpload(t.id)}
+                      disabled={uploadingId === t.id}
+                      aria-label="파일 업로드"
+                    >
+                      {uploadingId === t.id ? "↑..." : "📎 업로드"}
+                    </Button>
                     {!isDone && (
                       <Button
                         variant="ghost"
