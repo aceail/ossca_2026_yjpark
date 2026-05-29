@@ -119,11 +119,15 @@ function extractRecoveryCard(content: string): RecoveryParsed | null {
 
 function daysUntilLabel(iso: string | null): string {
   if (!iso) return "";
-  const d = Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000);
-  if (d > 1) return `D-${d}`;
-  if (d === 1) return "내일";
-  if (d === 0) return "오늘";
-  return `${Math.abs(d)}일 지남`;
+  const dl = new Date(iso);
+  if (isNaN(dl.getTime())) return "";
+  const KST_OFFSET = 9 * 60 * 60 * 1000;
+  const toKstDay = (t: number) => Math.floor((t + KST_OFFSET) / 86_400_000);
+  const diff = toKstDay(dl.getTime()) - toKstDay(Date.now());
+  if (diff > 1) return `D-${diff}`;
+  if (diff === 1) return "내일";
+  if (diff === 0) return "오늘";
+  return `${Math.abs(diff)}일 지남`;
 }
 
 function cardDeepLink(icon: string, text: string): string {

@@ -47,9 +47,16 @@ function isEditable(name: string): boolean {
 
 function daysUntil(deadlineIso: string | null | undefined): string {
   if (!deadlineIso) return "마감 없음";
-  const d = new Date(deadlineIso).getTime();
-  const now = Date.now();
-  const diff = Math.ceil((d - now) / (24 * 60 * 60 * 1000));
+  const dl = new Date(deadlineIso);
+  if (isNaN(dl.getTime())) return "마감 없음";
+  const KST_OFFSET = 9 * 60 * 60 * 1000;
+  const toKstDay = (t: number): number => {
+    const kstMs = t + KST_OFFSET;
+    return Math.floor(kstMs / 86_400_000);
+  };
+  const dlDay = toKstDay(dl.getTime());
+  const todayDay = toKstDay(Date.now());
+  const diff = dlDay - todayDay;
   if (diff > 1) return `D-${diff}`;
   if (diff === 1) return "내일 마감";
   if (diff === 0) return "오늘 마감";
@@ -60,9 +67,11 @@ function urgencyColor(deadlineIso: string | null | undefined, status: string): s
   if (status === "done") return "var(--color-recovery-accent)";
   if (status === "abandoned") return "var(--color-text-secondary)";
   if (!deadlineIso) return "var(--color-text-secondary)";
-  const diff = Math.ceil(
-    (new Date(deadlineIso).getTime() - Date.now()) / (24 * 60 * 60 * 1000),
-  );
+  const dl = new Date(deadlineIso);
+  if (isNaN(dl.getTime())) return "var(--color-text-secondary)";
+  const KST_OFFSET = 9 * 60 * 60 * 1000;
+  const toKstDay = (t: number) => Math.floor((t + KST_OFFSET) / 86_400_000);
+  const diff = toKstDay(dl.getTime()) - toKstDay(Date.now());
   if (diff < 0) return "#B00020";
   if (diff <= 1) return "var(--color-regret-accent)";
   if (diff <= 3) return "var(--color-recovery-accent)";

@@ -83,6 +83,21 @@ class TestTimeParse(unittest.TestCase):
     def test_empty_string(self):
         self.assertIsNone(parse_natural_deadline("", self.now))
 
+    def test_explicit_today_preserves_today_even_if_past(self):
+        # 22:00 KST 현재. 사용자가 "오늘 8시까지" → 8:00 KST 오늘 (지남, 표시는 "지남")
+        # 이게 우리 의도: 사용자가 "오늘" 명시했으면 오늘로 둠.
+        now = datetime(2026, 5, 29, 13, 0, tzinfo=timezone.utc)  # 22:00 KST
+        r = parse_natural_deadline("오늘 8시까지", now)
+        self.assertIsNotNone(r)
+        self.assertTrue(r.startswith("2026-05-29T08:00"))
+
+    def test_today_18_when_now_past_18(self):
+        # 19:00 KST 현재. "오늘 18시" → 오늘 18:00 (1시간 전).
+        now = datetime(2026, 5, 29, 10, 0, tzinfo=timezone.utc)  # 19:00 KST
+        r = parse_natural_deadline("오늘 18시", now)
+        self.assertIsNotNone(r)
+        self.assertTrue(r.startswith("2026-05-29T18:00"))
+
 
 if __name__ == "__main__":
     unittest.main()
