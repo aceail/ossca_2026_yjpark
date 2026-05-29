@@ -181,17 +181,17 @@ export default function ChatPage() {
     }
   }, []);
 
+  // Sprint 37 fix: 이전엔 sessionId 의존성 + ensureSession이 항상 list[0]
+  // (latest)로 setSessionId하는 게 결합돼서, 사용자가 옛 세션을 클릭해도
+  // 즉시 latest로 revert됐음. ensureSession은 초기 1회 (sessionId null)에만
+  // 실행하고, 이후 sessionId 변경은 switchSession이 책임진다.
   useEffect(() => {
-    if (userId) {
-      ensureSession(userId).then(() => {
-        triggerBriefing(userId);
-        if (sessionId) {
-          fetchMessages(sessionId).then(setMessages);
-        }
-      });
-      refreshTaskSummary(userId);
+    if (!userId) return;
+    refreshTaskSummary(userId);
+    if (sessionId === null) {
+      ensureSession(userId).then(() => triggerBriefing(userId));
     }
-  }, [userId, ensureSession, refreshTaskSummary, triggerBriefing, sessionId, fetchMessages]);
+  }, [userId, sessionId, ensureSession, refreshTaskSummary, triggerBriefing]);
 
   // Sprint 17: chat 페이지 진입 시 Notification 권한 한 번 요청
   useEffect(() => {

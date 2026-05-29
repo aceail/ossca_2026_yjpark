@@ -64,36 +64,69 @@ function EditPageInner() {
     let cancelled = false;
 
     const run = async () => {
+      const url = `${API_BASE}/api/tasks/${taskId}/files/${encodeURIComponent(filename)}/edit-config`;
       try {
-        setStatus("편집 설정 가져오는 중...");
-        const res = await fetch(
-          `${API_BASE}/api/tasks/${taskId}/files/${encodeURIComponent(filename)}/edit-config`,
-          { headers: { ...authHeaders() } },
-        );
+        setStatus(`편집 설정 가져오는 중... (${API_BASE})`);
+        // eslint-disable-next-line no-console
+        console.log("[edit] fetching", url);
+        const res = await fetch(url, { headers: { ...authHeaders() } });
         if (!res.ok) {
           const msg = await res.text().catch(() => "");
-          throw new Error(`설정 로드 실패 (${res.status})${msg ? `: ${msg.slice(0, 80)}` : ""}`);
+          throw new Error(
+            `edit-config 로드 실패 (${res.status})${msg ? `: ${msg.slice(0, 200)}` : ""}`,
+          );
         }
         const body: EditConfigResponse = await res.json();
+        // eslint-disable-next-line no-console
+        console.log("[edit] config received", body);
         if (cancelled) return;
 
-        setStatus("OnlyOffice 로딩...");
-        await injectScript(`${body.documentServerUrl}/web-apps/apps/api/documents/api.js`);
+        const apiUrl = `${body.documentServerUrl}/web-apps/apps/api/documents/api.js`;
+        setStatus(`OnlyOffice 로딩... (${body.documentServerUrl})`);
+        // eslint-disable-next-line no-console
+        console.log("[edit] injecting script", apiUrl);
+        await injectScript(apiUrl);
         if (cancelled) return;
         if (!window.DocsAPI) {
-          throw new Error("DocsAPI 미로드 (OnlyOffice 응답 확인)");
+          throw new Error(
+            `DocsAPI 미로드 — OnlyOffice 컨테이너 응답 확인: ${apiUrl}`,
+          );
         }
 
-        setStatus("");
+        setStatus("DocEditor 초기화 중...");
         const cfg = {
           ...body.config,
           token: body.token,
           width: "100%",
           height: "100%",
           type: "desktop",
+          events: {
+            onAppReady: () => {
+              // eslint-disable-next-line no-console
+              console.log("[edit] OnlyOffice ready");
+              setStatus("");
+            },
+            onError: (ev: unknown) => {
+              // eslint-disable-next-line no-console
+              console.error("[edit] DocEditor error", ev);
+              const msg =
+                typeof ev === "object" && ev !== null && "data" in ev
+                  ? JSON.stringify((ev as { data: unknown }).data)
+                  : String(ev);
+              setError(`OnlyOffice 에러: ${msg}`);
+            },
+            onWarning: (ev: unknown) => {
+              // eslint-disable-next-line no-console
+              console.warn("[edit] DocEditor warning", ev);
+            },
+          },
         };
+        // eslint-disable-next-line no-console
+        console.log("[edit] DocEditor config", cfg);
         editorRef.current = new window.DocsAPI.DocEditor("oo-placeholder", cfg);
       } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error("[edit] failed", e);
         if (!cancelled) setError((e as Error).message);
       }
     };
@@ -154,10 +187,28 @@ function EditPageInner() {
       </header>
       {error && (
         <div
-          className="p-3 text-[12px] flex-shrink-0"
-          style={{ color: "#B00020", backgroundColor: "var(--color-bg-base)" }}
+          className="p-3 text-[12px] flex-shrink-0 whitespace-pre-wrap break-words"
+          style={{
+            color: "#B00020",
+            backgroundColor: "var(--color-bg-base)",
+            borderBottom: "1px solid var(--color-border-subtle)",
+          }}
         >
-          {error}
+          ⚠ {error}
+          {"\n"}
+          {filename && (
+            <>
+              ↳ <strong>파일</strong>: {filename}
+              {"\n"}
+            </>
+          )}
+          {taskId && (
+            <>
+              ↳ <strong>task</strong>: {taskId}
+              {"\n"}
+            </>
+          )}
+          ↳ 디버그: 브라우저 DevTools → Console 탭에 자세한 로그가 있어요
         </div>
       )}
       <div
