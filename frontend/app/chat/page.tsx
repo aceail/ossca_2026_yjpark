@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useUser } from "../../lib/hooks/useUser";
 import { Button } from "../../components/Button";
 import { authHeaders } from "../../lib/auth";
+import { RecoveryCardCluster } from "../../components/RecoveryCardCluster";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8001";
 
@@ -60,7 +61,8 @@ function relativeTime(iso: string): string {
 
 // Sprint 15: assistant 메시지 안 action 라인을 rich card로 추출
 // backend가 '✅', '📁', '✓', '📅', '✏', '⚠' prefix로 라인 만듦.
-const CARD_PREFIXES = ["✅", "📁", "✓", "📅", "✏", "⚠"];
+const CARD_PREFIXES = ["✅", "📁", "✓", "📅", "✏", "⚠", "🪞", "🫧", "👣"];
+const RECOVERY_PREFIXES = ["🪞", "🫧", "👣"];
 
 interface ParsedMessage {
   cards: { icon: string; text: string }[];
@@ -75,6 +77,7 @@ function parseAssistantContent(content: string): ParsedMessage {
     const trimmed = line.trim();
     const prefix = CARD_PREFIXES.find((p) => trimmed.startsWith(p));
     if (prefix) {
+      if (RECOVERY_PREFIXES.includes(prefix)) continue; // consumed by RecoveryCardCluster
       cards.push({ icon: prefix, text: trimmed.slice(prefix.length).trim() });
     } else {
       bodyLines.push(line);
@@ -84,6 +87,34 @@ function parseAssistantContent(content: string): ParsedMessage {
     cards,
     body: bodyLines.join("\n").trim(),
   };
+}
+
+interface RecoveryParsed {
+  fact?: string;
+  feeling?: string;
+  micro?: string;
+  deepLink?: string;
+}
+
+function extractRecoveryCard(content: string): RecoveryParsed | null {
+  const lines = content.split("\n");
+  let fact: string | undefined, feeling: string | undefined, micro: string | undefined, deepLink: string | undefined;
+  for (const line of lines) {
+    const t = line.trim();
+    if (t.startsWith("🪞")) fact = t.slice(2).trim();
+    else if (t.startsWith("🫧")) feeling = t.slice(2).trim();
+    else if (t.startsWith("👣")) {
+      let m = t.slice(2).trim();
+      const dm = m.match(/::\s*deeplink=([^\s]+)/);
+      if (dm) {
+        deepLink = dm[1];
+        m = m.slice(0, dm.index).trim();
+      }
+      micro = m;
+    }
+  }
+  if (fact || feeling || micro) return { fact, feeling, micro, deepLink };
+  return null;
 }
 
 function daysUntilLabel(iso: string | null): string {
@@ -551,6 +582,11 @@ export default function ChatPage() {
                       className={`flex ${isUser ? "justify-end" : "justify-start"}`}
                     >
                       <div className="max-w-[80%] flex flex-col gap-1.5">
+                        {/* Recovery 카드 클러스터 (🪞🫧👣) */}
+                        {parsed && (() => {
+                          const rec = extractRecoveryCard(m.content);
+                          return rec ? <RecoveryCardCluster key="recovery" data={rec} /> : null;
+                        })()}
                         {/* Action 카드 (assistant만) */}
                         {parsed?.cards.map((c, i) => (
                           <div
