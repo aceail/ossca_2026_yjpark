@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useUser } from "../../lib/hooks/useUser";
 import { Button } from "../../components/Button";
 import { authHeaders } from "../../lib/auth";
+import { RecoveryCardCluster } from "../../components/RecoveryCardCluster";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8001";
 
@@ -60,7 +61,8 @@ function relativeTime(iso: string): string {
 
 // Sprint 15: assistant 메시지 안 action 라인을 rich card로 추출
 // backend가 '✅', '📁', '✓', '📅', '✏', '⚠' prefix로 라인 만듦.
-const CARD_PREFIXES = ["✅", "📁", "✓", "📅", "✏", "⚠"];
+const CARD_PREFIXES = ["✅", "📁", "✓", "📅", "✏", "⚠", "🪞", "🫧", "👣"];
+const RECOVERY_PREFIXES = ["🪞", "🫧", "👣"];
 
 interface ParsedMessage {
   cards: { icon: string; text: string }[];
@@ -75,6 +77,7 @@ function parseAssistantContent(content: string): ParsedMessage {
     const trimmed = line.trim();
     const prefix = CARD_PREFIXES.find((p) => trimmed.startsWith(p));
     if (prefix) {
+      if (RECOVERY_PREFIXES.includes(prefix)) continue; // consumed by RecoveryCardCluster
       cards.push({ icon: prefix, text: trimmed.slice(prefix.length).trim() });
     } else {
       bodyLines.push(line);
@@ -86,6 +89,34 @@ function parseAssistantContent(content: string): ParsedMessage {
   };
 }
 
+interface RecoveryParsed {
+  fact?: string;
+  feeling?: string;
+  micro?: string;
+  deepLink?: string;
+}
+
+function extractRecoveryCard(content: string): RecoveryParsed | null {
+  const lines = content.split("\n");
+  let fact: string | undefined, feeling: string | undefined, micro: string | undefined, deepLink: string | undefined;
+  for (const line of lines) {
+    const t = line.trim();
+    if (t.startsWith("🪞")) fact = t.slice(2).trim();
+    else if (t.startsWith("🫧")) feeling = t.slice(2).trim();
+    else if (t.startsWith("👣")) {
+      let m = t.slice(2).trim();
+      const dm = m.match(/::\s*deeplink=([^\s]+)/);
+      if (dm) {
+        deepLink = dm[1];
+        m = m.slice(0, dm.index).trim();
+      }
+      micro = m;
+    }
+  }
+  if (fact || feeling || micro) return { fact, feeling, micro, deepLink };
+  return null;
+}
+
 function daysUntilLabel(iso: string | null): string {
   if (!iso) return "";
   const d = Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000);
@@ -93,6 +124,22 @@ function daysUntilLabel(iso: string | null): string {
   if (d === 1) return "내일";
   if (d === 0) return "오늘";
   return `${Math.abs(d)}일 지남`;
+}
+
+function cardDeepLink(icon: string, text: string): string {
+  // try to extract a task id from text
+  const m = text.match(/#(\d+)|id=(\d+)|task[\s_]?(\d+)/i);
+  const tid = m ? (m[1] || m[2] || m[3]) : null;
+  const focus = tid ? `?focus=${tid}` : "";
+  switch (icon) {
+    case "📅": return "/calendar";
+    case "⚠": return "/settings";
+    case "✅":
+    case "✓":
+    case "📁":
+    case "✏":
+    default: return `/tasks${focus}`;
+  }
 }
 
 export default function ChatPage() {
@@ -551,36 +598,56 @@ export default function ChatPage() {
                       className={`flex ${isUser ? "justify-end" : "justify-start"}`}
                     >
                       <div className="max-w-[80%] flex flex-col gap-1.5">
+                        {/* Recovery 카드 클러스터 (🪞🫧👣) */}
+                        {parsed && (() => {
+                          const rec = extractRecoveryCard(m.content);
+                          return rec ? <RecoveryCardCluster key="recovery" data={rec} /> : null;
+                        })()}
                         {/* Action 카드 (assistant만) */}
-                        {parsed?.cards.map((c, i) => (
-                          <div
-                            key={i}
-                            className="flex items-center gap-2 rounded-xl px-3 py-2"
-                            style={{
-                              backgroundColor: c.icon === "⚠"
-                                ? "var(--color-softstop-bg)"
-                                : "var(--color-recovery-bg)",
-                              border: `1px solid ${
-                                c.icon === "⚠"
-                                  ? "var(--color-softstop-border)"
-                                  : "var(--color-recovery-border)"
-                              }`,
-                            }}
-                          >
-                            <span aria-hidden className="text-[16px] flex-shrink-0">
-                              {c.icon}
-                            </span>
-                            <span
-                              className="text-[13px]"
+                        {parsed?.cards.map((c, i) => {
+                          const href = cardDeepLink(c.icon, c.text);
+                          return (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => { window.location.href = href; }}
+                              className="card-mount flex items-center justify-between gap-3 rounded-xl px-3 py-2 group transition-transform duration-100 active:scale-[0.97] text-left w-full"
                               style={{
-                                fontFamily: "var(--font-feeling)",
-                                color: "var(--color-text-primary)",
+                                backgroundColor: c.icon === "⚠"
+                                  ? "var(--color-softstop-bg)"
+                                  : "var(--color-recovery-bg)",
+                                border: `1px solid ${
+                                  c.icon === "⚠"
+                                    ? "var(--color-softstop-border)"
+                                    : "var(--color-recovery-border)"
+                                }`,
                               }}
+                              aria-label={`${c.text} 이동`}
                             >
-                              {c.text}
-                            </span>
-                          </div>
-                        ))}
+                              <span className="flex items-center gap-2 min-w-0">
+                                <span aria-hidden className="text-[16px] flex-shrink-0">
+                                  {c.icon}
+                                </span>
+                                <span
+                                  className="text-[13px] truncate"
+                                  style={{
+                                    fontFamily: "var(--font-feeling)",
+                                    color: "var(--color-text-primary)",
+                                  }}
+                                >
+                                  {c.text}
+                                </span>
+                              </span>
+                              <span
+                                aria-hidden
+                                className="text-[12px] opacity-40 group-hover:opacity-80 group-hover:translate-x-0.5 transition-all duration-150 flex-shrink-0"
+                                style={{ color: "var(--color-recovery-accent)" }}
+                              >
+                                →
+                              </span>
+                            </button>
+                          );
+                        })}
                         {/* 본문 (있을 때만) */}
                         {(isUser || (parsed && parsed.body)) && (
                           <div

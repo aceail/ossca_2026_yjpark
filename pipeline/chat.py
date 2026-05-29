@@ -116,50 +116,234 @@ def _current_kst_stamp() -> str:
     return now_kst.strftime(f"%Y-%m-%d %H:%M KST ({wd}요일)")
 
 
-def _build_temporal_hints(user_message: str) -> str:
-    """Sprint 25: 사용자 발화의 상대 시간 표현 → 절대 날짜 강제 매핑.
+import re as _re
+import json as _json
+from datetime import datetime as _dt, timezone as _tz, timedelta as _td
 
-    qwen3 같은 모델은 시스템 prompt의 '오늘 날짜' 줄을 무시하고 cutoff
-    기준으로 '오늘'을 해석하는 경향이 있다. 사용자 메시지에 상대 단어가
-    있으면 그것만 명시 매핑해 다시 박는다.
+_KST_TZ = _tz(_td(hours=9))
+
+
+def _postprocess_recovery_card(text: str, conn=None, user_id=None) -> str:
+    """LLM이 recovery card JSON을 답변에 박아 보내면 가로채서
+    🪞🫧👣 prefix-line 포맷으로 변환. fact의 시간 표현은 backend가 재계산해
+    LLM 환각 방지.
+
+    감지: 첫 번째 발견되는 valid JSON object with card_type=='recovery'.
+    매칭 실패하면 원본 그대로.
+    """
+    if not text or "card_type" not in text:
+        return text
+
+    # 가장 먼저 나오는 {...} 블록 시도 (중첩 1단계 허용)
+    m = _re.search(r"\{(?:[^{}]|\{[^{}]*\})*\"card_type\"(?:[^{}]|\{[^{}]*\})*\}", text, flags=_re.DOTALL)
+    if not m:
+        return text
+    try:
+        obj = _json.loads(m.group(0))
+    except _json.JSONDecodeError:
+        return text
+    if obj.get("card_type") != "recovery":
+        return text
+    sentences = obj.get("sentences") or {}
+    if not isinstance(sentences, dict):
+        return text
+    fact = (sentences.get("fact") or "").strip()
+    feeling = (sentences.get("feeling") or "").strip()
+    micro = (sentences.get("micro_action") or "").strip()
+    if not (fact or feeling or micro):
+        return text
+
+    # 시간 부분 backend 재계산 (가장 임박 open task 기준)
+    time_suffix = _compute_time_suffix(conn, user_id) if conn is not None else ""
+
+    deeplink = _find_deeplink(conn, user_id) if conn is not None else "/tasks"
+
+    parts = []
+    if fact:
+        parts.append(f"🪞 {fact}{time_suffix}".strip())
+    if feeling:
+        parts.append(f"🫧 {feeling}")
+    if micro:
+        parts.append(f"👣 {micro} :: deeplink={deeplink}")
+
+    # JSON 블록 제거 + 카드 라인으로 교체
+    before = text[: m.start()].rstrip()
+    after = text[m.end() :].lstrip()
+    body_parts = [p for p in (before, "\n".join(parts), after) if p]
+    return "\n".join(body_parts).strip()
+
+
+def _compute_time_suffix(conn, user_id) -> str:
+    """가장 임박한 open task의 deadline 기준 \" (현재 X, 마감 Y, N남음)\" 생성.
+    없으면 빈 문자열."""
+    if conn is None or not user_id:
+        return ""
+    row = conn.execute(
+        "SELECT title, deadline_at FROM Task "
+        "WHERE user_id = ? AND status = 'open' AND deadline_at IS NOT NULL "
+        "ORDER BY deadline_at ASC LIMIT 1",
+        (user_id,),
+    ).fetchone()
+    if not row or not row["deadline_at"]:
+        return ""
+    try:
+        dl = _dt.fromisoformat(row["deadline_at"])
+        if dl.tzinfo is None:
+            dl = dl.replace(tzinfo=_tz.utc)
+        now = _dt.now(_tz.utc)
+        delta = dl - now
+        if delta.total_seconds() < 0:
+            return " (마감 지남)"
+        hrs = int(delta.total_seconds() // 3600)
+        mins = int((delta.total_seconds() % 3600) // 60)
+        dl_kst = dl.astimezone(_KST_TZ)
+        return f" (마감 {dl_kst.strftime('%H:%M')}, {hrs}h {mins}min 남음)"
+    except (ValueError, TypeError):
+        return ""
+
+
+def _find_deeplink(conn, user_id) -> str:
+    if conn is None or not user_id:
+        return "/tasks"
+    row = conn.execute(
+        "SELECT id FROM Task WHERE user_id = ? AND status = 'open' "
+        "ORDER BY deadline_at IS NULL, deadline_at ASC LIMIT 1",
+        (user_id,),
+    ).fetchone()
+    if row:
+        return f"/tasks?focus={row['id']}"
+    return "/tasks"
+
+
+def _apply_time_regex_to_recent_tasks(conn, user_id: str, user_message: str, now) -> int:
+    """방금 만들어진 task의 deadline을 regex로 보정. 보정된 행 수 반환."""
+    try:
+        from pipeline.time_parse import parse_natural_deadline
+    except ImportError:
+        return 0
+    iso = parse_natural_deadline(user_message, now)
+    if not iso:
+        return 0
+    from datetime import timedelta
+    cutoff = (now - timedelta(seconds=60)).isoformat()
+    rows = conn.execute(
+        "SELECT id, deadline_at FROM Task "
+        "WHERE user_id = ? AND created_at >= ? AND status = 'open'",
+        (user_id, cutoff),
+    ).fetchall()
+    n = 0
+    for r in rows:
+        if (r["deadline_at"] or "")[:10] != iso[:10] or (r["deadline_at"] or "")[11:16] != iso[11:16]:
+            conn.execute(
+                "UPDATE Task SET deadline_at = ?, updated_at = ? WHERE id = ?",
+                (iso, datetime.now(timezone.utc).isoformat(), r["id"]),
+            )
+            n += 1
+    if n:
+        conn.commit()
+    return n
+
+
+def _build_temporal_hints(user_message: str, conn=None, user_id: str = "") -> str:
+    """Sprint 25 + 40: 한국어 상대 날짜 키워드 → 절대 날짜 매핑 + 현재 시각 + open task 마감.
+
+    user_message에 상대 시간 키워드(오늘/내일/모레/이번주/다음주/요일 등)가 있을 때만 hint를
+    반환. 키워드 없으면 빈 문자열 (Sprint 25 약속 유지).
+
+    추가로 conn+user_id가 있고 키워드가 있으면 open task 마감 hint도 함께.
     """
     if not user_message:
         return ""
-    from datetime import date as _date, timedelta
-    today_kst = (datetime.now(timezone.utc) + timedelta(hours=9)).date()
+    from datetime import timedelta
 
-    def _line(label: str, d: _date) -> str:
-        return f"- {label} = {d.isoformat()} ({_KO_WEEKDAY[d.weekday()]}요일)"
+    _KST = timezone(timedelta(hours=9))
+    now_utc = datetime.now(timezone.utc)
+    now_kst = now_utc.astimezone(_KST)
+    today = now_kst.date()
 
-    lines: list[str] = []
+    _WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"]
+
+    mappings: list[str] = []
+
+    # 절대-날짜 매핑
     if "오늘" in user_message:
-        lines.append(_line("오늘", today_kst))
+        mappings.append(f"오늘 = {today.isoformat()}")
     if "내일" in user_message:
-        lines.append(_line("내일", today_kst + timedelta(days=1)))
+        mappings.append(f"내일 = {(today + timedelta(days=1)).isoformat()}")
     if "모레" in user_message:
-        lines.append(_line("모레", today_kst + timedelta(days=2)))
+        mappings.append(f"모레 = {(today + timedelta(days=2)).isoformat()}")
+    if "글피" in user_message:
+        mappings.append(f"글피 = {(today + timedelta(days=3)).isoformat()}")
     if "이번주" in user_message:
-        end = today_kst + timedelta(days=(6 - today_kst.weekday()))
-        lines.append(_line("이번주 끝(일)", end))
+        days_until_sunday = (6 - today.weekday()) % 7
+        end_of_week = today + timedelta(days=days_until_sunday)
+        mappings.append(f"이번주 끝 = {end_of_week.isoformat()}")
     if "다음주" in user_message:
-        next_mon = today_kst + timedelta(days=(7 - today_kst.weekday()))
-        next_sun = next_mon + timedelta(days=6)
-        lines.append(_line("다음주 시작(월)", next_mon))
-        lines.append(_line("다음주 끝(일)", next_sun))
-    for i, kw in enumerate(_KO_WEEKDAY):
-        if f"{kw}요일" in user_message:
-            days_ahead = (i - today_kst.weekday()) % 7
-            if days_ahead == 0:
-                days_ahead = 7
-            lines.append(_line(f"다음 {kw}요일", today_kst + timedelta(days=days_ahead)))
-            break
-    if not lines:
+        days_until_monday = (7 - today.weekday()) % 7 or 7
+        next_monday = today + timedelta(days=days_until_monday)
+        mappings.append(f"다음주 시작 = {next_monday.isoformat()}")
+        m = re.search(r"다음주\s*(월|화|수|목|금|토|일)", user_message)
+        if m:
+            day_idx = _WEEKDAYS.index(m.group(1))
+            target = next_monday + timedelta(days=day_idx)
+            mappings.append(f"다음 {m.group(1)}요일 = {target.isoformat()}")
+
+    # 단독 요일 (다음주 prefix 없이) — 다가오는 그 요일
+    weekday_pattern = re.search(r"(?<![다이번])주?\s*(월|화|수|목|금|토|일)요일", user_message)
+    if weekday_pattern and "다음주" not in user_message[: weekday_pattern.start()]:
+        wd = weekday_pattern.group(1)
+        day_idx = _WEEKDAYS.index(wd)
+        days_ahead = (day_idx - today.weekday()) % 7 or 7
+        target = today + timedelta(days=days_ahead)
+        mappings.append(f"다음 {wd}요일 = {target.isoformat()}")
+
+    if not mappings:
         return ""
-    return (
-        "\n\n[시간 해석 강제 매핑 — 절대 무시 금지]\n"
-        + "\n".join(lines)
-        + "\n위 매핑을 그대로 사용. 학습 데이터의 옛 날짜 절대 사용 금지.\n"
-    )
+
+    # Sprint 40 augmentation: open task 마감 hint (conn+user_id 있을 때만)
+    deadline_hints: list[str] = []
+    if conn is not None and user_id:
+        try:
+            rows = conn.execute(
+                "SELECT title, deadline_at FROM Task "
+                "WHERE user_id = ? AND status = 'open' AND deadline_at IS NOT NULL "
+                "ORDER BY deadline_at ASC LIMIT 3",
+                (user_id,),
+            ).fetchall()
+            for r in rows:
+                try:
+                    dl = datetime.fromisoformat(r["deadline_at"])
+                    if dl.tzinfo is None:
+                        dl = dl.replace(tzinfo=timezone.utc)
+                    dl_kst = dl.astimezone(_KST)
+                    delta = dl - now_utc
+                    sec = int(delta.total_seconds())
+                    if sec < 0:
+                        rem = "이미 지남"
+                    else:
+                        hrs = sec // 3600
+                        mins = (sec % 3600) // 60
+                        rem = f"{hrs}h {mins}min 남음"
+                    deadline_hints.append(
+                        f"  - 마감 \"{r['title']}\": {dl_kst.strftime('%Y-%m-%d %H:%M')} KST ({rem})"
+                    )
+                except (ValueError, TypeError):
+                    continue
+        except Exception:
+            pass
+
+    parts = [
+        "",
+        "[시간 hint — 강제 매핑. 답변에 절대 직접 계산하지 말고 아래 값만 verbatim 사용.]",
+        f"- 현재 시각: {now_kst.strftime('%Y-%m-%d %H:%M')} KST ({_WEEKDAYS[now_kst.weekday()]}요일)",
+    ]
+    for m in mappings:
+        parts.append(f"- {m}")
+    if deadline_hints:
+        parts.append("- 열린 작업 마감:")
+        parts.extend(deadline_hints)
+
+    return "\n".join(parts)
 
 
 def _persona_system_prompt_with_memory(
@@ -582,7 +766,7 @@ def post_user_message(
     system_prompt = _persona_system_prompt_with_memory(
         conn, sess["persona_id"], sess["user_id"],
     )
-    system_prompt = system_prompt + _build_temporal_hints(content)
+    system_prompt = system_prompt + _build_temporal_hints(content, conn=conn, user_id=sess["user_id"])
     # Sprint 30: RAG auto-inject
     try:
         from rag.retriever import recall_semantic, format_for_prompt
@@ -699,6 +883,13 @@ def post_user_message(
             final_reply += "\n\n" + final_content
     else:
         final_reply = final_content or "(빈 응답)"
+
+    # Sprint 40 T2: regex로 방금 만들어진 task deadline 보정
+    _apply_time_regex_to_recent_tasks(
+        conn, sess["user_id"], content, datetime.now(timezone.utc)
+    )
+    # Sprint 40 T2: recovery card JSON → prefix-line 포맷 변환
+    final_reply = _postprocess_recovery_card(final_reply, conn=conn, user_id=sess["user_id"])
 
     msg_id = _record_message(conn, session_id, "assistant", final_reply)
 
