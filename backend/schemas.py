@@ -288,3 +288,15 @@ class FolderSnapshotItem(BaseModel):
 class FolderSnapshotListResponse(BaseModel):
     task_id: int
     snapshots: list[FolderSnapshotItem]
+
+
+class TaskFileItem(BaseModel):
+    name: str
+    size: int
+    mtime: str  # ISO 8601
+
+
+class TaskFileListResponse(BaseModel):
+    task_id: int
+    folder_path: Optional[str] = None
+    files: list[TaskFileItem]
