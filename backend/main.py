@@ -97,6 +97,42 @@ async def _rag_index_loop(interval_seconds: int) -> None:
         await asyncio.sleep(interval_seconds)
 
 
+async def _push_notification_loop(interval_seconds: int) -> None:
+    """Sprint 39: smart push 발송 + snooze 재발송. 15분 주기."""
+    import logging
+    logger = logging.getLogger(__name__)
+    while True:
+        try:
+            from pipeline.notifications import (
+                redispatch_snoozed,
+                send_pending,
+            )
+            from datetime import datetime, timezone
+            conn = open_db(DB_PATH)
+            try:
+                now = datetime.now(timezone.utc)
+                users = [
+                    r["user_id"]
+                    for r in conn.execute(
+                        "SELECT DISTINCT user_id FROM PushSubscription"
+                    ).fetchall()
+                ]
+                total = 0
+                for uid in users:
+                    res = send_pending(conn, uid, now=now)
+                    total += res["count"]
+                snz = redispatch_snoozed(conn, now=now)
+                if total or snz:
+                    logger.info(f"push: sent={total} snoozed={snz}")
+            finally:
+                conn.close()
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            logger.exception("push notification loop error")
+        await asyncio.sleep(interval_seconds)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """시작 시 DB migrate + seed_builtin_prompts + folder watch task."""
@@ -123,6 +159,7 @@ async def lifespan(app: FastAPI):
     followup_task = None
     reflection_task = None
     rag_index_task = None
+    push_task = None
     if os.environ.get("NAEIL_DISABLE_WATCH") != "1":
         interval_min = int(os.environ.get("NAEIL_WATCH_INTERVAL_MIN", "30"))
         watch_task = asyncio.create_task(
@@ -143,11 +180,17 @@ async def lifespan(app: FastAPI):
         rag_index_task = asyncio.create_task(
             _rag_index_loop(int(os.environ.get("NAEIL_RAG_INDEX_INTERVAL_SEC", "60")))
         )
+    if os.environ.get("NAEIL_DISABLE_PUSH") != "1":
+        push_task = asyncio.create_task(
+            _push_notification_loop(
+                int(os.environ.get("NAEIL_PUSH_INTERVAL_SEC", "900"))
+            )
+        )
 
     try:
         yield
     finally:
-        for t in (watch_task, followup_task, reflection_task, rag_index_task):
+        for t in (watch_task, followup_task, reflection_task, rag_index_task, push_task):
             if t:
                 t.cancel()
                 try:
