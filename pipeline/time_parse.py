@@ -58,13 +58,14 @@ def parse_natural_deadline(text: str, now: datetime) -> Optional[str]:
         return None
     base = _today_kst(now)
     now_kst = _ensure_kst(now)
+    explicit_today = "오늘" in text
 
     # 1. "HH:MM" (24h colon) — word boundary 없이 숫자:숫자 패턴
     m = re.search(r"([01]?\d|2[0-3]):([0-5]\d)", text)
     if m:
         h, mi = int(m.group(1)), int(m.group(2))
         target = base + timedelta(hours=h, minutes=mi)
-        if target < now_kst:
+        if target < now_kst and not explicit_today:
             target += timedelta(days=1)
         return _to_iso(target)
 
@@ -79,7 +80,7 @@ def parse_natural_deadline(text: str, now: datetime) -> Optional[str]:
             h = 0
         mi = int(min_str) if min_str else 0
         target = base + timedelta(hours=h, minutes=mi)
-        if target < now_kst:
+        if target < now_kst and not explicit_today:
             target += timedelta(days=1)
         return _to_iso(target)
 
@@ -89,7 +90,7 @@ def parse_natural_deadline(text: str, now: datetime) -> Optional[str]:
         h = int(m.group(1))
         if 0 <= h <= 23:
             target = base + timedelta(hours=h)
-            if target < now_kst:
+            if target < now_kst and not explicit_today:
                 target += timedelta(days=1)
             return _to_iso(target)
 
