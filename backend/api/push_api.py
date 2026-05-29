@@ -12,7 +12,7 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from pydantic import BaseModel
 
 from backend.deps import (
@@ -133,3 +133,41 @@ def delete_subscription(
     assert_user_matches(token_user_id, row["user_id"])
     conn.execute("DELETE FROM PushSubscription WHERE id = ?", (sub_id,))
     conn.commit()
+
+
+# Sprint 39: notification action endpoints. SW에서 호출되므로 auth 헤더 없음
+# (OS notification UI에서는 헤더 못 붙임). notification_id가 implicit identity.
+
+@router.post("/{notification_id}/clicked")
+def notification_clicked(
+    notification_id: int,
+    body: dict = Body(default={}),
+    conn: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """SW가 클릭 보고. clicked_at이 NULL인 행만 첫 클릭으로 기록."""
+    from datetime import datetime, timezone as _tz
+    action = (body.get("action") or "open")[:32]
+    now = datetime.now(_tz.utc).isoformat()
+    cur = conn.execute(
+        "UPDATE NotificationLog SET clicked_at = ?, click_action = ? "
+        "WHERE id = ? AND clicked_at IS NULL",
+        (now, action, notification_id),
+    )
+    conn.commit()
+    return {"ok": True, "updated": cur.rowcount}
+
+
+@router.post("/{notification_id}/snooze")
+def notification_snooze(
+    notification_id: int,
+    conn: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """30분 후 재발송 예약. _push_notification_loop가 redispatch_snoozed로 처리."""
+    from datetime import datetime, timedelta, timezone as _tz
+    until = (datetime.now(_tz.utc) + timedelta(minutes=30)).isoformat()
+    cur = conn.execute(
+        "UPDATE NotificationLog SET snooze_until = ? WHERE id = ?",
+        (until, notification_id),
+    )
+    conn.commit()
+    return {"ok": True, "until": until, "updated": cur.rowcount}

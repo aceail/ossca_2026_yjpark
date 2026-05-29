@@ -8,14 +8,14 @@ import sqlite3
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 
 from backend.schemas import (
     CreateUserRequest,
     CreateUserResponse,
     UserProfileResponse,
 )
-from backend.deps import get_db, require_token
+from backend.deps import get_db, require_token, assert_user_matches, resolve_user_from_token
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -98,3 +98,26 @@ def get_user_profile(
         active_persona_icon=row["avatar_icon"],
         active_persona_color=row["avatar_color"],
     )
+
+
+@router.post("/{user_id}/notification-prefs")
+def set_notification_prefs(
+    user_id: str,
+    body: dict = Body(...),
+    conn: sqlite3.Connection = Depends(get_db),
+    token_user_id: str = Depends(resolve_user_from_token),
+) -> dict:
+    """notification_prefs를 UserMemory에 upsert. Sprint 39: quiet hours + max/day."""
+    assert_user_matches(token_user_id, user_id)
+    import json as _j
+    from pipeline.memory import upsert_memory
+    keep = {
+        k: body[k]
+        for k in ("quiet_start", "quiet_end", "max_per_day")
+        if k in body
+    }
+    upsert_memory(
+        conn, user_id=user_id, key="notification_prefs",
+        value=_j.dumps(keep), source="settings",
+    )
+    return {"ok": True, "prefs": keep}
