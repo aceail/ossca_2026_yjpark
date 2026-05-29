@@ -323,5 +323,84 @@ class TestTaskFiles(unittest.TestCase):
         self.assertEqual(r.status_code, 403)
 
 
+class TestCreateBlankFile(unittest.TestCase):
+    def _open_task(self):
+        u, h = _create_user()
+        tid = client.post(
+            "/api/tasks", headers=h, json={"user_id": u, "title": "B"}
+        ).json()["id"]
+        return u, h, tid
+
+    def test_create_blank_md(self):
+        u, h, tid = self._open_task()
+        r = client.post(
+            f"/api/tasks/{tid}/files/new", headers=h,
+            json={"filename": "노트", "ext": "md"},
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertEqual(body["created_filename"], "노트.md")
+        # 실제 파일 확인
+        listing = client.get(f"/api/tasks/{tid}/files", headers=h).json()["files"]
+        self.assertEqual([f["name"] for f in listing], ["노트.md"])
+
+    def test_create_blank_docx_uses_template(self):
+        u, h, tid = self._open_task()
+        r = client.post(
+            f"/api/tasks/{tid}/files/new", headers=h,
+            json={"filename": "report", "ext": "docx"},
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["created_filename"], "report.docx")
+        # 다운로드해서 ZIP 헤더 (Office Open XML) 확인 — 비어 있지 않아야 함
+        dl = client.get(
+            f"/api/tasks/{tid}/files/report.docx/download", headers=h,
+        )
+        self.assertEqual(dl.status_code, 200)
+        # PK\x03\x04 = ZIP magic number
+        self.assertEqual(dl.content[:4], b"PK\x03\x04")
+        self.assertGreater(len(dl.content), 1000)
+
+    def test_create_blank_xlsx_pptx(self):
+        u, h, tid = self._open_task()
+        for ext in ("xlsx", "pptx"):
+            r = client.post(
+                f"/api/tasks/{tid}/files/new", headers=h,
+                json={"filename": f"t-{ext}", "ext": ext},
+            )
+            self.assertEqual(r.status_code, 200, r.text)
+            self.assertTrue(r.json()["created_filename"].endswith(f".{ext}"))
+
+    def test_invalid_ext_rejected(self):
+        u, h, tid = self._open_task()
+        r = client.post(
+            f"/api/tasks/{tid}/files/new", headers=h,
+            json={"filename": "bad", "ext": "exe"},
+        )
+        self.assertEqual(r.status_code, 400)
+
+    def test_duplicate_filename_appends_suffix(self):
+        u, h, tid = self._open_task()
+        client.post(
+            f"/api/tasks/{tid}/files/new", headers=h,
+            json={"filename": "same", "ext": "md"},
+        )
+        r2 = client.post(
+            f"/api/tasks/{tid}/files/new", headers=h,
+            json={"filename": "same", "ext": "md"},
+        )
+        self.assertEqual(r2.status_code, 200)
+        self.assertEqual(r2.json()["created_filename"], "same_1.md")
+
+    def test_owner_required(self):
+        u1, h1, tid = self._open_task()
+        _, h2 = _create_user()
+        r = client.post(
+            f"/api/tasks/{tid}/files/new", headers=h2,
+            json={"filename": "x", "ext": "md"},
+        )
+        self.assertEqual(r.status_code, 403)
+
+
 if __name__ == "__main__":
     unittest.main()
