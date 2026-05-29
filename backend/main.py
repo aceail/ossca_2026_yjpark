@@ -180,12 +180,11 @@ async def lifespan(app: FastAPI):
         rag_index_task = asyncio.create_task(
             _rag_index_loop(int(os.environ.get("NAEIL_RAG_INDEX_INTERVAL_SEC", "60")))
         )
-    if os.environ.get("NAEIL_DISABLE_PUSH") != "1":
-        push_task = asyncio.create_task(
-            _push_notification_loop(
-                int(os.environ.get("NAEIL_PUSH_INTERVAL_SEC", "900"))
-            )
+    push_task = asyncio.create_task(
+        _push_notification_loop(
+            int(os.environ.get("NAEIL_PUSH_INTERVAL_SEC", "900"))
         )
+    )
 
     try:
         yield
