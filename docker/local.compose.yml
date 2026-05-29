@@ -50,8 +50,9 @@ services:
     container_name: naeil-onlyoffice
     restart: unless-stopped
     ports:
-      # Loopback only — single-tenant. Override via TOMORROW_YOU_OO_PORT.
-      - "127.0.0.1:${TOMORROW_YOU_OO_PORT:-8090}:80"
+      # 0.0.0.0 — 브라우저가 다른 머신에서 SSH tunnel로 접근할 수 있게.
+      # 보안: backend JWT 검증 + 2h 만료라 토큰 없이는 쓸 수 없음.
+      - "${TOMORROW_YOU_OO_PORT:-8090}:80"
     environment:
       # JWT 보호 활성화 — backend가 같은 secret으로 서명/검증.
       JWT_ENABLED: "true"
