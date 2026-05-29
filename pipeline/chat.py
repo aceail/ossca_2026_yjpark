@@ -116,6 +116,134 @@ def _current_kst_stamp() -> str:
     return now_kst.strftime(f"%Y-%m-%d %H:%M KST ({wd}요일)")
 
 
+import re as _re
+import json as _json
+from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+
+_KST_TZ = _tz(_td(hours=9))
+
+
+def _postprocess_recovery_card(text: str, conn=None, user_id=None) -> str:
+    """LLM이 recovery card JSON을 답변에 박아 보내면 가로채서
+    🪞🫧👣 prefix-line 포맷으로 변환. fact의 시간 표현은 backend가 재계산해
+    LLM 환각 방지.
+
+    감지: 첫 번째 발견되는 valid JSON object with card_type=='recovery'.
+    매칭 실패하면 원본 그대로.
+    """
+    if not text or "card_type" not in text:
+        return text
+
+    # 가장 먼저 나오는 {...} 블록 시도 (중첩 1단계 허용)
+    m = _re.search(r"\{(?:[^{}]|\{[^{}]*\})*\"card_type\"(?:[^{}]|\{[^{}]*\})*\}", text, flags=_re.DOTALL)
+    if not m:
+        return text
+    try:
+        obj = _json.loads(m.group(0))
+    except _json.JSONDecodeError:
+        return text
+    if obj.get("card_type") != "recovery":
+        return text
+    sentences = obj.get("sentences") or {}
+    if not isinstance(sentences, dict):
+        return text
+    fact = (sentences.get("fact") or "").strip()
+    feeling = (sentences.get("feeling") or "").strip()
+    micro = (sentences.get("micro_action") or "").strip()
+    if not (fact or feeling or micro):
+        return text
+
+    # 시간 부분 backend 재계산 (가장 임박 open task 기준)
+    time_suffix = _compute_time_suffix(conn, user_id) if conn is not None else ""
+
+    deeplink = _find_deeplink(conn, user_id) if conn is not None else "/tasks"
+
+    parts = []
+    if fact:
+        parts.append(f"🪞 {fact}{time_suffix}".strip())
+    if feeling:
+        parts.append(f"🫧 {feeling}")
+    if micro:
+        parts.append(f"👣 {micro} :: deeplink={deeplink}")
+
+    # JSON 블록 제거 + 카드 라인으로 교체
+    before = text[: m.start()].rstrip()
+    after = text[m.end() :].lstrip()
+    body_parts = [p for p in (before, "\n".join(parts), after) if p]
+    return "\n".join(body_parts).strip()
+
+
+def _compute_time_suffix(conn, user_id) -> str:
+    """가장 임박한 open task의 deadline 기준 \" (현재 X, 마감 Y, N남음)\" 생성.
+    없으면 빈 문자열."""
+    if conn is None or not user_id:
+        return ""
+    row = conn.execute(
+        "SELECT title, deadline_at FROM Task "
+        "WHERE user_id = ? AND status = 'open' AND deadline_at IS NOT NULL "
+        "ORDER BY deadline_at ASC LIMIT 1",
+        (user_id,),
+    ).fetchone()
+    if not row or not row["deadline_at"]:
+        return ""
+    try:
+        dl = _dt.fromisoformat(row["deadline_at"])
+        if dl.tzinfo is None:
+            dl = dl.replace(tzinfo=_tz.utc)
+        now = _dt.now(_tz.utc)
+        delta = dl - now
+        if delta.total_seconds() < 0:
+            return " (마감 지남)"
+        hrs = int(delta.total_seconds() // 3600)
+        mins = int((delta.total_seconds() % 3600) // 60)
+        dl_kst = dl.astimezone(_KST_TZ)
+        return f" (마감 {dl_kst.strftime('%H:%M')}, {hrs}h {mins}min 남음)"
+    except (ValueError, TypeError):
+        return ""
+
+
+def _find_deeplink(conn, user_id) -> str:
+    if conn is None or not user_id:
+        return "/tasks"
+    row = conn.execute(
+        "SELECT id FROM Task WHERE user_id = ? AND status = 'open' "
+        "ORDER BY deadline_at IS NULL, deadline_at ASC LIMIT 1",
+        (user_id,),
+    ).fetchone()
+    if row:
+        return f"/tasks?focus={row['id']}"
+    return "/tasks"
+
+
+def _apply_time_regex_to_recent_tasks(conn, user_id: str, user_message: str, now) -> int:
+    """방금 만들어진 task의 deadline을 regex로 보정. 보정된 행 수 반환."""
+    try:
+        from pipeline.time_parse import parse_natural_deadline
+    except ImportError:
+        return 0
+    iso = parse_natural_deadline(user_message, now)
+    if not iso:
+        return 0
+    from datetime import timedelta
+    cutoff = (now - timedelta(seconds=60)).isoformat()
+    rows = conn.execute(
+        "SELECT id, deadline_at FROM Task "
+        "WHERE user_id = ? AND created_at >= ? AND status = 'open'",
+        (user_id, cutoff),
+    ).fetchall()
+    n = 0
+    for r in rows:
+        if (r["deadline_at"] or "")[:10] != iso[:10] or (r["deadline_at"] or "")[11:16] != iso[11:16]:
+            conn.execute(
+                "UPDATE Task SET deadline_at = ?, updated_at = ? WHERE id = ?",
+                (iso, datetime.now(timezone.utc).isoformat(), r["id"]),
+            )
+            n += 1
+    if n:
+        conn.commit()
+    return n
+
+
 def _build_temporal_hints(user_message: str) -> str:
     """Sprint 25: 사용자 발화의 상대 시간 표현 → 절대 날짜 강제 매핑.
 
@@ -699,6 +827,13 @@ def post_user_message(
             final_reply += "\n\n" + final_content
     else:
         final_reply = final_content or "(빈 응답)"
+
+    # Sprint 40 T2: regex로 방금 만들어진 task deadline 보정
+    _apply_time_regex_to_recent_tasks(
+        conn, sess["user_id"], content, datetime.now(timezone.utc)
+    )
+    # Sprint 40 T2: recovery card JSON → prefix-line 포맷 변환
+    final_reply = _postprocess_recovery_card(final_reply, conn=conn, user_id=sess["user_id"])
 
     msg_id = _record_message(conn, session_id, "assistant", final_reply)
 
