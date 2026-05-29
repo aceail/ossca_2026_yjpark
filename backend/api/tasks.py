@@ -24,6 +24,7 @@ from backend.deps import (
 from backend.schemas import (
     FolderSnapshotItem,
     FolderSnapshotListResponse,
+    TaskBlankFileRequest,
     TaskCreateRequest,
     TaskFileItem,
     TaskFileListResponse,
@@ -351,6 +352,79 @@ def download_task_file(
         filename=target.name,
         media_type="application/octet-stream",
     )
+
+
+_TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
+_NEW_FILE_EXTS = {"docx", "xlsx", "pptx", "md", "txt"}
+_BINARY_TEMPLATE_EXTS = {"docx", "xlsx", "pptx"}
+
+
+@router.post("/{task_id}/files/new")
+def create_blank_file(
+    task_id: int,
+    body: "TaskBlankFileRequest",
+    conn: sqlite3.Connection = Depends(get_db),
+    token_user_id: str = Depends(resolve_user_from_token),
+) -> dict:
+    """task의 업로드 디렉터리에 빈 docx/xlsx/pptx/md/txt 생성."""
+    existing = _load_task(conn, task_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Task not found")
+    assert_user_matches(token_user_id, existing["user_id"])
+
+    ext = body.ext.lower().lstrip(".")
+    if ext not in _NEW_FILE_EXTS:
+        raise HTTPException(
+            status_code=400, detail=f"ext must be one of {sorted(_NEW_FILE_EXTS)}",
+        )
+
+    # 파일명 sanitize + ext 강제
+    base = _safe_filename(body.filename or "")
+    if base.lower().endswith(f".{ext}"):
+        name = base
+    else:
+        # 기존 확장자 떼고 새 ext 붙임
+        if "." in base:
+            base = base.rsplit(".", 1)[0]
+        name = f"{base}.{ext}"
+
+    dest = _upload_root() / existing["user_id"] / str(task_id)
+    dest.mkdir(parents=True, exist_ok=True)
+    out = dest / name
+    if out.exists():
+        stem, suffix = out.stem, out.suffix
+        i = 1
+        while out.exists():
+            out = dest / f"{stem}_{i}{suffix}"
+            i += 1
+
+    if ext in _BINARY_TEMPLATE_EXTS:
+        tpl = _TEMPLATES_DIR / f"blank.{ext}"
+        if not tpl.exists():
+            raise HTTPException(
+                status_code=503, detail=f"Template missing: blank.{ext}",
+            )
+        out.write_bytes(tpl.read_bytes())
+    elif ext == "md":
+        out.write_text("# 새 문서\n", encoding="utf-8")
+    elif ext == "txt":
+        out.write_text("", encoding="utf-8")
+
+    if not existing.get("folder_path"):
+        conn.execute(
+            "UPDATE Task SET folder_path = ?, updated_at = ? WHERE id = ?",
+            (str(dest), _now_iso(), task_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE Task SET updated_at = ? WHERE id = ?",
+            (_now_iso(), task_id),
+        )
+    conn.commit()
+    row = conn.execute("SELECT * FROM Task WHERE id = ?", (task_id,)).fetchone()
+    task = _row_to_task(row).model_dump()
+    task["created_filename"] = out.name
+    return task
 
 
 @router.get("/{task_id}/snapshots", response_model=FolderSnapshotListResponse)

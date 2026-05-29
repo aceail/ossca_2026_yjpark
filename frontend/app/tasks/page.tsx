@@ -109,6 +109,14 @@ export default function TasksPage() {
   const [expandedTask, setExpandedTask] = useState<Record<number, boolean>>({});
   const [filesLoadingId, setFilesLoadingId] = useState<number | null>(null);
 
+  // 새 파일 생성 폼
+  const [newFileForTask, setNewFileForTask] = useState<number | null>(null);
+  const [newFileName, setNewFileName] = useState("");
+  const [newFileExt, setNewFileExt] = useState<"docx" | "xlsx" | "pptx" | "md" | "txt">(
+    "docx",
+  );
+  const [creatingFile, setCreatingFile] = useState(false);
+
   const refreshFiles = useCallback(
     async (id: number) => {
       setFilesLoadingId(id);
@@ -149,6 +157,56 @@ export default function TasksPage() {
       await refreshFiles(id);
     } catch (e) {
       setError((e as Error).message);
+    }
+  };
+
+  const openNewFileForm = (id: number) => {
+    setNewFileForTask(id);
+    setNewFileName("");
+    setNewFileExt("docx");
+  };
+
+  const cancelNewFileForm = () => {
+    setNewFileForTask(null);
+    setNewFileName("");
+  };
+
+  const submitNewFile = async () => {
+    if (newFileForTask === null) return;
+    const fname = newFileName.trim() || "새 문서";
+    setCreatingFile(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/tasks/${newFileForTask}/files/new`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ filename: fname, ext: newFileExt }),
+      });
+      if (!res.ok) {
+        const msg = await res.text().catch(() => "");
+        throw new Error(
+          `생성 실패 (${res.status})${msg ? `: ${msg.slice(0, 80)}` : ""}`,
+        );
+      }
+      const body = await res.json();
+      const created = body.created_filename as string;
+      // 파일 리스트 새로고침 + 편집 페이지 새 탭 열기
+      await refreshFiles(newFileForTask);
+      setExpandedTask((prev) => ({ ...prev, [newFileForTask]: true }));
+      const taskId = newFileForTask;
+      cancelNewFileForm();
+      // OnlyOffice가 편집 가능한 ext만 자동으로 새 탭 — md/txt는 그냥 리스트로
+      if (isEditable(created)) {
+        window.open(
+          `/tasks/edit?taskId=${taskId}&name=${encodeURIComponent(created)}`,
+          "_blank",
+          "noopener,noreferrer",
+        );
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setCreatingFile(false);
     }
   };
 
@@ -652,6 +710,14 @@ export default function TasksPage() {
                     <Button
                       variant="ghost"
                       size="sm"
+                      onClick={() => openNewFileForm(t.id)}
+                      aria-label="새 문서 만들기"
+                    >
+                      ➕ 새 문서
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => triggerUpload(t.id)}
                       disabled={uploadingId === t.id}
                       aria-label="파일 업로드"
@@ -686,6 +752,76 @@ export default function TasksPage() {
                     </Button>
                   </div>
                 </div>
+
+                {/* 새 문서 생성 인라인 폼 */}
+                {newFileForTask === t.id && (
+                  <div
+                    className="mt-2 pt-2 flex flex-col gap-1.5"
+                    style={{ borderTop: "1px dashed var(--color-border-subtle)" }}
+                  >
+                    <p
+                      className="text-[11px]"
+                      style={{ color: "var(--color-text-secondary)" }}
+                    >
+                      새 문서를 만들고 곧장 편집기에 띄울게요
+                    </p>
+                    <div className="flex gap-1.5 items-center">
+                      <input
+                        type="text"
+                        value={newFileName}
+                        onChange={(e) => setNewFileName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") submitNewFile();
+                          if (e.key === "Escape") cancelNewFileForm();
+                        }}
+                        placeholder="파일명 (예: 발표자료)"
+                        autoFocus
+                        className="flex-1 px-2 py-1 text-[12px] rounded"
+                        style={{
+                          backgroundColor: "var(--color-bg-base)",
+                          border: "1px solid var(--color-border-subtle)",
+                          color: "var(--color-text-primary)",
+                        }}
+                      />
+                      <select
+                        value={newFileExt}
+                        onChange={(e) =>
+                          setNewFileExt(
+                            e.target.value as "docx" | "xlsx" | "pptx" | "md" | "txt",
+                          )
+                        }
+                        className="px-2 py-1 text-[12px] rounded"
+                        style={{
+                          backgroundColor: "var(--color-bg-base)",
+                          border: "1px solid var(--color-border-subtle)",
+                          color: "var(--color-text-primary)",
+                        }}
+                      >
+                        <option value="docx">docx</option>
+                        <option value="xlsx">xlsx</option>
+                        <option value="pptx">pptx</option>
+                        <option value="md">md</option>
+                        <option value="txt">txt</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={submitNewFile}
+                        disabled={creatingFile}
+                        className="text-[11px] px-2 underline-offset-2 hover:underline"
+                      >
+                        {creatingFile ? "..." : "만들기"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={cancelNewFileForm}
+                        className="text-[11px] px-1"
+                        style={{ color: "var(--color-text-secondary)" }}
+                      >
+                        취소
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* 업로드된 파일 패널 */}
                 <div className="mt-2 pt-2" style={{ borderTop: "1px dashed var(--color-border-subtle)" }}>

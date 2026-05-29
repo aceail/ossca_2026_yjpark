@@ -300,3 +300,8 @@ class TaskFileListResponse(BaseModel):
     task_id: int
     folder_path: Optional[str] = None
     files: list[TaskFileItem]
+
+
+class TaskBlankFileRequest(BaseModel):
+    filename: str
+    ext: str  # docx | xlsx | pptx | md | txt
