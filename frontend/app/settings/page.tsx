@@ -100,6 +100,10 @@ export default function SettingsPage() {
   const [safetyTrend, setSafetyTrend] = useState<SafetyWeek[]>([]);
   const [loadingTrend, setLoadingTrend] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [quietStart, setQuietStart] = useState(22);
+  const [quietEnd, setQuietEnd] = useState(8);
+  const [maxPerDay, setMaxPerDay] = useState(3);
+  const [savingPrefs, setSavingPrefs] = useState(false);
 
   const [forbiddenTopics, setForbiddenTopics] = useState<string[]>([]);
   const [topicInput, setTopicInput] = useState("");
@@ -357,6 +361,28 @@ export default function SettingsPage() {
 
   const removeTopic = (topic: string) => {
     setForbiddenTopics((prev) => prev.filter((t) => t !== topic));
+  };
+
+  const saveNotificationPrefs = async () => {
+    if (!userId) return;
+    setSavingPrefs(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/users/${userId}/notification-prefs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({
+          quiet_start: quietStart,
+          quiet_end: quietEnd,
+          max_per_day: maxPerDay,
+        }),
+      });
+      if (!res.ok) throw new Error(`저장 실패 (${res.status})`);
+      showToast("✓ 알림 설정 저장됨");
+    } catch (e) {
+      showToast((e as Error).message);
+    } finally {
+      setSavingPrefs(false);
+    }
   };
 
   const saveTopics = async () => {
@@ -652,6 +678,64 @@ export default function SettingsPage() {
             >
               {pushBusy ? "..." : pushSubscribed ? "끄기" : "켜기"}
             </Button>
+          </div>
+        </section>
+
+        {/* 섹션 2.75: Sprint 39 — 조용한 시간 + 알림 빈도 */}
+        <section>
+          <h2 className="text-[14px] font-semibold mb-1"
+              style={{ fontFamily: "var(--font-feeling)" }}>
+            조용한 시간 + 알림 빈도
+          </h2>
+          <p className="text-[12px] mb-3" style={{ color: "var(--color-text-secondary)" }}>
+            이 범위 안에서는 알림이 안 와요. 하루 최대 알림 개수도 정해주세요.
+          </p>
+          <div className="flex flex-col gap-2 px-4 py-3 rounded-xl"
+               style={{
+                 backgroundColor: "var(--color-bg-card)",
+                 border: "1px solid var(--color-border-subtle)",
+               }}>
+            <div className="flex items-center gap-2 text-[13px]">
+              <span>조용한 시간</span>
+              <input type="number" min={0} max={23} value={quietStart}
+                     onChange={(e) => setQuietStart(Number(e.target.value))}
+                     className="w-14 px-2 py-1 rounded"
+                     style={{
+                       backgroundColor: "var(--color-bg-base)",
+                       border: "1px solid var(--color-border-subtle)",
+                       color: "var(--color-text-primary)",
+                     }} />
+              <span>시 ~</span>
+              <input type="number" min={0} max={23} value={quietEnd}
+                     onChange={(e) => setQuietEnd(Number(e.target.value))}
+                     className="w-14 px-2 py-1 rounded"
+                     style={{
+                       backgroundColor: "var(--color-bg-base)",
+                       border: "1px solid var(--color-border-subtle)",
+                       color: "var(--color-text-primary)",
+                     }} />
+              <span>시</span>
+            </div>
+            <div className="flex items-center gap-2 text-[13px]">
+              <span>하루 최대</span>
+              <select value={maxPerDay}
+                      onChange={(e) => setMaxPerDay(Number(e.target.value))}
+                      className="px-2 py-1 rounded"
+                      style={{
+                        backgroundColor: "var(--color-bg-base)",
+                        border: "1px solid var(--color-border-subtle)",
+                        color: "var(--color-text-primary)",
+                      }}>
+                <option value={1}>1개</option>
+                <option value={3}>3개</option>
+                <option value={5}>5개</option>
+              </select>
+            </div>
+            <div className="flex justify-end">
+              <Button size="sm" onClick={saveNotificationPrefs} disabled={savingPrefs}>
+                {savingPrefs ? "저장 중..." : "저장"}
+              </Button>
+            </div>
           </div>
         </section>
 
