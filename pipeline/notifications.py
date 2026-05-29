@@ -292,6 +292,7 @@ def send_pending(
             "actions": c["actions"],
             "data": {"notification_id": nid, "url": c["url"]},
         }
+        # Bare Exception OK: 3rd-party VAPID push (network/protocol errors) must not crash the loop. Degrade gracefully to dispatched=0.
         try:
             fn = push_fn or _default_push
             n = fn(conn, user_id, payload)
@@ -332,6 +333,7 @@ def redispatch_snoozed(
             "url": "/chat",
             "data": {"notification_id": r["id"]},
         }
+        # Bare Exception OK: 3rd-party VAPID push (network/protocol errors) must not crash the loop. Degrade gracefully to dispatched=0.
         try:
             fn = push_fn or _default_push
             fn(conn, r["user_id"], payload)

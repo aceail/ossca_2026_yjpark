@@ -1,12 +1,15 @@
 """Sprint 39 — Smart Push Notifications."""
 from __future__ import annotations
 
+import os
 import sqlite3
 import sys
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+_TEMP_DBS: list[str] = []
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -17,6 +20,7 @@ from db import migrate, open_db
 def _setup():
     tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
     tmp.close()
+    _TEMP_DBS.append(tmp.name)
     conn = open_db(Path(tmp.name))
     migrate(conn)
     user_id = "n-user"
@@ -156,6 +160,43 @@ class TestComputeDueNotifications(unittest.TestCase):
         self.assertEqual(out, [])
 
 
+    def test_quiet_hours_passes_at_end_boundary(self):
+        """08:00 KST (start=22 end=8) should pass (boundary inclusive of start, exclusive of end)."""
+        from pipeline.notifications import compute_due_notifications
+        conn, uid = _setup()
+        _seed_prefs(conn, uid, {"quiet_start": 22, "quiet_end": 8})
+        # 08:00 KST = 23:00 UTC previous day
+        now = datetime(2026, 5, 28, 23, 0, tzinfo=timezone.utc)
+        _seed_task(conn, uid, title="x",
+                   deadline_at=(datetime(2026, 5, 30, tzinfo=timezone.utc)).isoformat())
+        out = compute_due_notifications(conn, uid, now=now)
+        # 08:00 KST should NOT be in quiet (start <= hr < end), so deadline triggers.
+        self.assertEqual(len(out), 1)
+
+    def test_quiet_hours_blocks_at_start_boundary(self):
+        """22:00 KST should block (start <= hr in wrap mode)."""
+        from pipeline.notifications import compute_due_notifications
+        conn, uid = _setup()
+        _seed_prefs(conn, uid, {"quiet_start": 22, "quiet_end": 8})
+        # 22:00 KST = 13:00 UTC same day
+        now = datetime(2026, 5, 29, 13, 0, tzinfo=timezone.utc)
+        _seed_task(conn, uid, title="x",
+                   deadline_at=(now + timedelta(days=1)).isoformat())
+        out = compute_due_notifications(conn, uid, now=now)
+        self.assertEqual(out, [])
+
+    def test_quiet_hours_disabled_when_start_equals_end(self):
+        """start == end (예: 0==0) means no quiet hours."""
+        from pipeline.notifications import compute_due_notifications
+        conn, uid = _setup()
+        _seed_prefs(conn, uid, {"quiet_start": 0, "quiet_end": 0})
+        now = datetime(2026, 5, 29, 12, 0, tzinfo=timezone.utc)
+        _seed_task(conn, uid, title="x",
+                   deadline_at=(now + timedelta(days=1)).isoformat())
+        out = compute_due_notifications(conn, uid, now=now)
+        self.assertEqual(len(out), 1)
+
+
 class TestSendPending(unittest.TestCase):
     def test_send_pending_inserts_log_and_calls_push(self):
         from pipeline.notifications import send_pending
@@ -199,6 +240,14 @@ class TestRedispatchSnoozed(unittest.TestCase):
             "SELECT snooze_until FROM NotificationLog"
         ).fetchone()
         self.assertIsNone(row["snooze_until"])
+
+
+def tearDownModule():
+    for p in _TEMP_DBS:
+        try:
+            os.unlink(p)
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":
