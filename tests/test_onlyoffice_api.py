@@ -226,7 +226,11 @@ class TestOoCallback(unittest.TestCase):
             f"/api/_oo/callback?t={tok}",
             json={"status": 2, "url": "file:///etc/passwd"},
         )
-        self.assertEqual(r.status_code, 400)
+        # WOPI 약속: HTTP 200 + {"error": 1} (HTTP 4xx/5xx 던지면 OnlyOffice가
+        # "system file error"로 사용자에게 표시되어 디버깅 불가)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["error"], 1)
+        self.assertIn("scheme", r.json().get("detail", "").lower())
 
 
 if __name__ == "__main__":

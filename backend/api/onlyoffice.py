@@ -168,24 +168,50 @@ def oo_callback(
 
     status=2 (MustSave) / status=6 (MustForceSave): body.url에서 수정된 파일
     fetch해 원본 덮어쓰기. 다른 status는 ack만.
+
+    WOPI 약속: 정상 = {"error": 0}, 실패 = {"error": 1}. HTTP 500 던지면
+    OnlyOffice가 사용자에게 "시스템 파일 에러"라고 표시하니까 반드시 200으로
+    {"error": 1}을 응답해야 retry/diag가 가능.
     """
-    claims = _verify_edit_token(t)
+    import logging
+    logger = logging.getLogger(__name__)
+
+    try:
+        claims = _verify_edit_token(t)
+    except HTTPException as e:
+        logger.error(f"[oo-callback] token invalid: {e.detail}")
+        return {"error": 1, "detail": e.detail}
+
     user_id = claims["user_id"]
     task_id = int(claims["task_id"])
     filename = claims["filename"]
     status = int(body.get("status") or 0)
+    logger.info(
+        f"[oo-callback] task={task_id} file={filename} status={status} "
+        f"body_keys={list(body.keys())}"
+    )
 
-    if status in (2, 6):
-        url = body.get("url")
-        if not url:
-            raise HTTPException(status_code=400, detail="Callback missing url")
-        base = (_upload_root() / user_id / str(task_id)).resolve()
-        target = (base / filename).resolve()
-        if not str(target).startswith(str(base) + os.sep) and target != base:
-            raise HTTPException(status_code=400, detail="Invalid filename in token")
-        if not (url.startswith("http://") or url.startswith("https://")):
-            raise HTTPException(status_code=400, detail="Invalid callback url")
-        target.parent.mkdir(parents=True, exist_ok=True)
+    if status not in (2, 6):
+        # 다른 status (1=editing, 4=closed, 7=force-save-error) 모두 ack
+        return {"error": 0}
+
+    url = body.get("url")
+    if not url:
+        logger.error(f"[oo-callback] status={status} but no url in body")
+        return {"error": 1, "detail": "Callback missing url"}
+
+    base = (_upload_root() / user_id / str(task_id)).resolve()
+    target = (base / filename).resolve()
+    if not str(target).startswith(str(base) + os.sep) and target != base:
+        logger.error(f"[oo-callback] traversal blocked filename={filename}")
+        return {"error": 1, "detail": "Invalid filename in token"}
+    if not (url.startswith("http://") or url.startswith("https://")):
+        logger.error(f"[oo-callback] non-http url={url}")
+        return {"error": 1, "detail": "Invalid callback url scheme"}
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    logger.info(f"[oo-callback] fetching modified file from {url} → {target}")
+    try:
         with urllib.request.urlopen(url, timeout=60) as resp:
             with target.open("wb") as fout:
                 while True:
@@ -193,10 +219,14 @@ def oo_callback(
                     if not chunk:
                         break
                     fout.write(chunk)
-        conn.execute(
-            "UPDATE Task SET updated_at = ? WHERE id = ?",
-            (datetime.now(timezone.utc).isoformat(), task_id),
-        )
-        conn.commit()
+    except Exception as e:  # noqa: BLE001
+        logger.exception(f"[oo-callback] fetch failed url={url}")
+        return {"error": 1, "detail": f"Fetch failed: {type(e).__name__}: {e}"}
 
+    conn.execute(
+        "UPDATE Task SET updated_at = ? WHERE id = ?",
+        (datetime.now(timezone.utc).isoformat(), task_id),
+    )
+    conn.commit()
+    logger.info(f"[oo-callback] saved task={task_id} file={filename} bytes={target.stat().st_size}")
     return {"error": 0}
