@@ -111,14 +111,14 @@ async def _push_notification_loop(interval_seconds: int) -> None:
             conn = open_db(DB_PATH)
             try:
                 now = datetime.now(timezone.utc)
-                users = [
+                user_ids = [
                     r["user_id"]
                     for r in conn.execute(
                         "SELECT DISTINCT user_id FROM PushSubscription"
                     ).fetchall()
                 ]
                 total = 0
-                for uid in users:
+                for uid in user_ids:
                     res = send_pending(conn, uid, now=now)
                     total += res["count"]
                 snz = redispatch_snoozed(conn, now=now)

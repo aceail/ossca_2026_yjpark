@@ -337,12 +337,13 @@ def redispatch_snoozed(
         try:
             fn = push_fn or _default_push
             fn(conn, r["user_id"], payload)
+            conn.execute(
+                "UPDATE NotificationLog SET snooze_until = NULL WHERE id = ?",
+                (r["id"],),
+            )
             n += 1
         except Exception:  # noqa: BLE001
+            # 발송 실패 — snooze_until 유지해 다음 tick에서 재시도
             pass
-        conn.execute(
-            "UPDATE NotificationLog SET snooze_until = NULL WHERE id = ?",
-            (r["id"],),
-        )
     conn.commit()
     return n
