@@ -55,6 +55,11 @@ function EditPageInner() {
   const editorRef = useRef<unknown>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string>("준비 중...");
+  const [log, setLog] = useState<string[]>([]);
+  const pushLog = React.useCallback((line: string) => {
+    const stamp = new Date().toISOString().slice(11, 19);
+    setLog((prev) => [...prev.slice(-30), `[${stamp}] ${line}`]);
+  }, []);
 
   useEffect(() => {
     if (!taskId || !filename) {
@@ -67,9 +72,9 @@ function EditPageInner() {
       const url = `${API_BASE}/api/tasks/${taskId}/files/${encodeURIComponent(filename)}/edit-config`;
       try {
         setStatus(`편집 설정 가져오는 중... (${API_BASE})`);
-        // eslint-disable-next-line no-console
-        console.log("[edit] fetching", url);
+        pushLog(`GET ${url}`);
         const res = await fetch(url, { headers: { ...authHeaders() } });
+        pushLog(`edit-config HTTP ${res.status}`);
         if (!res.ok) {
           const msg = await res.text().catch(() => "");
           throw new Error(
@@ -77,23 +82,23 @@ function EditPageInner() {
           );
         }
         const body: EditConfigResponse = await res.json();
-        // eslint-disable-next-line no-console
-        console.log("[edit] config received", body);
+        pushLog(`config doctype=${(body.config as { documentType?: string }).documentType} key=${(body.config.document as { key?: string }).key}`);
         if (cancelled) return;
 
         const apiUrl = `${body.documentServerUrl}/web-apps/apps/api/documents/api.js`;
         setStatus(`OnlyOffice 로딩... (${body.documentServerUrl})`);
-        // eslint-disable-next-line no-console
-        console.log("[edit] injecting script", apiUrl);
+        pushLog(`inject ${apiUrl}`);
         await injectScript(apiUrl);
+        pushLog(`script loaded, DocsAPI=${typeof window.DocsAPI}`);
         if (cancelled) return;
         if (!window.DocsAPI) {
           throw new Error(
-            `DocsAPI 미로드 — OnlyOffice 컨테이너 응답 확인: ${apiUrl}`,
+            `DocsAPI 미로드 — OnlyOffice 응답 확인: ${apiUrl}`,
           );
         }
 
         setStatus("DocEditor 초기화 중...");
+        pushLog("new DocsAPI.DocEditor()");
         const cfg = {
           ...body.config,
           token: body.token,
@@ -102,31 +107,26 @@ function EditPageInner() {
           type: "desktop",
           events: {
             onAppReady: () => {
-              // eslint-disable-next-line no-console
-              console.log("[edit] OnlyOffice ready");
+              pushLog("onAppReady");
               setStatus("");
             },
+            onDocumentReady: () => pushLog("onDocumentReady"),
             onError: (ev: unknown) => {
-              // eslint-disable-next-line no-console
-              console.error("[edit] DocEditor error", ev);
+              pushLog(`onError: ${JSON.stringify(ev)}`);
               const msg =
                 typeof ev === "object" && ev !== null && "data" in ev
                   ? JSON.stringify((ev as { data: unknown }).data)
                   : String(ev);
               setError(`OnlyOffice 에러: ${msg}`);
             },
-            onWarning: (ev: unknown) => {
-              // eslint-disable-next-line no-console
-              console.warn("[edit] DocEditor warning", ev);
-            },
+            onWarning: (ev: unknown) => pushLog(`onWarning: ${JSON.stringify(ev)}`),
+            onDownloadAs: () => pushLog("onDownloadAs"),
           },
         };
-        // eslint-disable-next-line no-console
-        console.log("[edit] DocEditor config", cfg);
         editorRef.current = new window.DocsAPI.DocEditor("oo-placeholder", cfg);
+        pushLog("DocEditor constructed — waiting for onAppReady");
       } catch (e) {
-        // eslint-disable-next-line no-console
-        console.error("[edit] failed", e);
+        pushLog(`FAILED: ${(e as Error).message}`);
         if (!cancelled) setError((e as Error).message);
       }
     };
@@ -217,6 +217,29 @@ function EditPageInner() {
         className="flex-1"
         style={{ minHeight: 0, width: "100%" }}
       />
+      {/* in-page diagnostic — 사용자가 DevTools 없이도 진행상황 캡처 가능 */}
+      <details
+        className="flex-shrink-0"
+        style={{
+          borderTop: "1px solid var(--color-border-subtle)",
+          backgroundColor: "var(--color-bg-card)",
+          maxHeight: "180px",
+          overflowY: "auto",
+        }}
+      >
+        <summary
+          className="px-3 py-1.5 text-[11px] cursor-pointer"
+          style={{ color: "var(--color-text-secondary)" }}
+        >
+          🛠 진단 로그 ({log.length}) — 클릭해서 열기
+        </summary>
+        <pre
+          className="text-[10px] font-mono px-3 pb-2 whitespace-pre-wrap break-all"
+          style={{ color: "var(--color-text-secondary)" }}
+        >
+          {log.join("\n") || "(아직 로그 없음)"}
+        </pre>
+      </details>
     </main>
   );
 }
